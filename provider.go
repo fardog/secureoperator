@@ -1,8 +1,12 @@
 package secureoperator
 
 import (
-	"github.com/miekg/dns"
+	"fmt"
 	"net"
+	"strconv"
+	"strings"
+
+	"github.com/miekg/dns"
 )
 
 type DNSQuestion struct {
@@ -42,7 +46,14 @@ func (r DNSRR) RR() dns.RR {
 		case *dns.CNAME:
 			v.Target = r.Data
 		case *dns.MX:
-			v.Mx = r.Data
+			c := strings.SplitN(r.Data, " ", 2)
+			pref, err := strconv.ParseUint(c[0], 10, 32)
+			if err != nil {
+				break
+			}
+
+			v.Preference = uint16(pref)
+			v.Mx = c[1]
 		}
 	} else {
 		rr = dns.RR(&dns.RFC3597{
