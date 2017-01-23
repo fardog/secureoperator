@@ -1,7 +1,6 @@
 package secureoperator
 
 import (
-	"fmt"
 	"net"
 	"strconv"
 	"strings"
