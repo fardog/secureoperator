@@ -16,6 +16,7 @@ var (
 	listenAddress = flag.String(
 		"listen", ":53", "listen address, as `[host]:port`",
 	)
+
 	endpoint = flag.String(
 		"endpoint",
 		"https://dns.google.com/resolve",
@@ -26,6 +27,13 @@ var (
 		true,
 		"Randomly pad requests to vary request length",
 	)
+
+	logLevel = flag.String(
+		"level",
+		"info",
+		"Log level, one of: debug, info, warn, error, fatal, panic",
+	)
+
 	enableTCP = flag.Bool("tcp", true, "Listen on TCP")
 	enableUDP = flag.Bool("udp", true, "Listen on UDP")
 )
@@ -56,6 +64,14 @@ func main() {
 		flag.PrintDefaults()
 	}
 	flag.Parse()
+
+	// set the loglevel
+	level, err := log.ParseLevel(*logLevel)
+	if err != nil {
+		log.Fatalf("invalid log level: %s", err.Error())
+		return
+	}
+	log.SetLevel(level)
 
 	provider := secop.GDNSProvider{
 		Endpoint: *endpoint,
