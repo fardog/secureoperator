@@ -12,7 +12,7 @@ func TestDNSRRTypeA(t *testing.T) {
 
 	r = DNSRR{
 		Name: "who.wut.co.jp",
-		Type: int32(dns.TypeA),
+		Type: dns.TypeA,
 		TTL:  300,
 		Data: "10.10.10.1",
 	}
@@ -29,7 +29,7 @@ func TestDNSRRTypeA(t *testing.T) {
 	if h.Name != r.Name {
 		t.Errorf("unexpected name %v", h.Name)
 	}
-	if h.Ttl != uint32(r.TTL) {
+	if h.Ttl != r.TTL {
 		t.Errorf("unexpected TTL %v", h.Ttl)
 	}
 	if v.A.String() != r.Data {
@@ -43,7 +43,7 @@ func TestDNSRRTypeMX(t *testing.T) {
 
 	r = DNSRR{
 		Name: "who.wut.co.jp",
-		Type: int32(dns.TypeMX),
+		Type: dns.TypeMX,
 		TTL:  300,
 		Data: "10 mail.who.wut.co.jp",
 	}
@@ -60,7 +60,7 @@ func TestDNSRRTypeMX(t *testing.T) {
 	if h.Name != r.Name {
 		t.Errorf("unexpected name %v", h.Name)
 	}
-	if h.Ttl != uint32(r.TTL) {
+	if h.Ttl != r.TTL {
 		t.Errorf("unexpected TTL %v", h.Ttl)
 	}
 	if v.Preference != uint16(10) {
@@ -77,7 +77,7 @@ func TestDNSRRTypeCNAME(t *testing.T) {
 
 	r = DNSRR{
 		Name: "who.wut.co.jp",
-		Type: int32(dns.TypeCNAME),
+		Type: dns.TypeCNAME,
 		TTL:  300,
 		Data: "omg.wtf.bbq",
 	}
@@ -94,7 +94,7 @@ func TestDNSRRTypeCNAME(t *testing.T) {
 	if h.Name != r.Name {
 		t.Errorf("unexpected name %v", h.Name)
 	}
-	if h.Ttl != uint32(r.TTL) {
+	if h.Ttl != r.TTL {
 		t.Errorf("unexpected TTL %v", h.Ttl)
 	}
 	if v.Target != r.Data {
@@ -108,7 +108,7 @@ func TestDNSRRTypeAAAA(t *testing.T) {
 
 	r = DNSRR{
 		Name: "who.wut.co.jp",
-		Type: int32(dns.TypeAAAA),
+		Type: dns.TypeAAAA,
 		TTL:  300,
 		Data: "::1",
 	}
@@ -125,7 +125,7 @@ func TestDNSRRTypeAAAA(t *testing.T) {
 	if h.Name != r.Name {
 		t.Errorf("unexpected name %v", h.Name)
 	}
-	if h.Ttl != uint32(r.TTL) {
+	if h.Ttl != r.TTL {
 		t.Errorf("unexpected TTL %v", h.Ttl)
 	}
 	if v.AAAA.String() != r.Data {
