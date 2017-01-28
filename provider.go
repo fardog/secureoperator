@@ -11,14 +11,14 @@ import (
 // DNSQuestion represents a DNS question to be resolved by a DNS server
 type DNSQuestion struct {
 	Name string `json:"name,omitempty"`
-	Type int32  `json:"type,omitempty"`
+	Type uint16 `json:"type,omitempty"`
 }
 
 // DNSRR represents a DNS record, part of a response to a DNSQuestion
 type DNSRR struct {
 	Name string `json:"name,omitempty"`
-	Type int32  `json:"type,omitempty"`
-	TTL  int32  `json:"TTL,omitempty"`
+	Type uint16 `json:"type,omitempty"`
+	TTL  uint32 `json:"TTL,omitempty"`
 	Data string `json:"data,omitempty"`
 }
 

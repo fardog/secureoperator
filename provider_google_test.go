@@ -35,7 +35,7 @@ func TestQuery(t *testing.T) {
 
 	resp, err := g.Query(DNSQuestion{
 		Name: name,
-		Type: int32(dns.TypeA),
+		Type: dns.TypeA,
 	})
 	if err != nil {
 		t.Error(err)

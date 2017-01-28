@@ -23,7 +23,7 @@ func NewHandler(provider Provider, options *HandlerOptions) *Handler {
 func (h *Handler) Handle(w dns.ResponseWriter, r *dns.Msg) {
 	q := DNSQuestion{
 		Name: r.Question[0].Name,
-		Type: int32(r.Question[0].Qtype),
+		Type: r.Question[0].Qtype,
 	}
 	log.Infoln("requesting", q.Name, q.Type)
 
@@ -38,7 +38,7 @@ func (h *Handler) Handle(w dns.ResponseWriter, r *dns.Msg) {
 	for idx, c := range dnsResp.Question {
 		questions = append(questions, dns.Question{
 			Name:   c.Name,
-			Qtype:  uint16(c.Type),
+			Qtype:  c.Type,
 			Qclass: r.Question[idx].Qclass,
 		})
 	}
