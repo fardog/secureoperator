@@ -1,5 +1,8 @@
 # secureoperator
 
+[![Build Status](https://travis-ci.org/fardog/secureoperator.svg?branch=master)](https://travis-ci.org/fardog/secureoperator)
+[![](https://godoc.org/github.com/fardog/secureoperator?status.svg)](https://godoc.org/github.com/fardog/secureoperator)
+
 A DNS-protocol proxy for Google's [DNS-over-HTTPS][dnsoverhttps]: allows you to
 run a server on your local network which responds to DNS queries, but requests
 records across the internet using HTTPS.
@@ -40,7 +43,7 @@ consider the following:
 * Currently only the following records are supported: `A, AAAA, CNAME, MX`
 * Padding is not very smart; it just always pads to 1024 characters, and fails
   if the URL would've been larger than that
-* No tests have been written
+* More thorough tests should be written
 * No caching is implemented, and probably never will. If you need caching, put
   your `secure-operator` server behind another DNS server which provides
   caching.

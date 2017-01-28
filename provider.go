@@ -8,11 +8,13 @@ import (
 	"github.com/miekg/dns"
 )
 
+// DNSQuestion represents a DNS question to be resolved by a DNS server
 type DNSQuestion struct {
 	Name string `json:"name,omitempty"`
 	Type int32  `json:"type,omitempty"`
 }
 
+// DNSRR represents a DNS record, part of a response to a DNSQuestion
 type DNSRR struct {
 	Name string `json:"name,omitempty"`
 	Type int32  `json:"type,omitempty"`
@@ -20,6 +22,23 @@ type DNSRR struct {
 	Data string `json:"data,omitempty"`
 }
 
+// RR transforms a DNSRR to a dns.RR. It does not support a full compliment of
+// DNS records, although it will grow additional types as necessary. Currently
+// it supports:
+//   * A
+//   * AAAA
+//   * CNAME
+//   * MX
+//
+// Any unsupported type will be translated to an RFC3597 message.
+//
+// Transforms from A, AAAA, and CNAME records are straightforward; the
+// (DNSRR).Data fields are translated from strings to IP addresses (in the case
+// of A, AAAA), or copied straight over (in the case of CNAME) to the dns.RR.
+//
+// MX Records expect the Data field to be in the format of "10 whatever.com",
+// where "10" is the unsigned integer priority, and "whatever.com" is the server
+// expected to serve the request.
 func (r DNSRR) RR() dns.RR {
 	var rr dns.RR
 
@@ -63,6 +82,8 @@ func (r DNSRR) RR() dns.RR {
 	return rr
 }
 
+// DNSResponse represents a complete DNS server response, to be served by the
+// DNS server handler.
 type DNSResponse struct {
 	Question           []DNSQuestion
 	Answer             []DNSRR
@@ -76,6 +97,7 @@ type DNSResponse struct {
 	ResponseCode       int
 }
 
+// Provider is an interface representing a servicer of DNS queries.
 type Provider interface {
 	Query(DNSQuestion) (*DNSResponse, error)
 }
