@@ -16,6 +16,7 @@ var (
 // since Google's API is in flux, we keep them separate
 type GDNSQuestion DNSQuestion
 
+// DNSQuestion transforms a GDNSQuestion to a DNSQuestion and returns it.
 func (r GDNSQuestion) DNSQuestion() DNSQuestion {
 	return DNSQuestion{
 		Name: r.Name,
@@ -23,8 +24,11 @@ func (r GDNSQuestion) DNSQuestion() DNSQuestion {
 	}
 }
 
+// GDNSQuestions is a array of GDNSQuestion objects
 type GDNSQuestions []GDNSQuestion
 
+// DNSQuestions transforms an array of GDNSQuestion objects to an array of
+// DNSQuestion objects
 func (rs GDNSQuestions) DNSQuestions() (rqs []DNSQuestion) {
 	for _, r := range rs {
 		rqs = append(rqs, r.DNSQuestion())
@@ -38,6 +42,7 @@ func (rs GDNSQuestions) DNSQuestions() (rqs []DNSQuestion) {
 // Google's API is in flux, we keep them separate
 type GDNSRR DNSRR
 
+// DNSRR transforms a GDNSRR to a DNSRR
 func (r GDNSRR) DNSRR() DNSRR {
 	return DNSRR{
 		Name: r.Name,
@@ -47,8 +52,10 @@ func (r GDNSRR) DNSRR() DNSRR {
 	}
 }
 
+// GDNSRRs represents an array of GDNSRR objects
 type GDNSRRs []GDNSRR
 
+// DNSRRs transforms an array of GDNSRR objects to an array of DNSRR objects
 func (rs GDNSRRs) DNSRRs() (rrs []DNSRR) {
 	for _, r := range rs {
 		rrs = append(rrs, r.DNSRR())
@@ -57,6 +64,7 @@ func (rs GDNSRRs) DNSRRs() (rrs []DNSRR) {
 	return
 }
 
+// GDNSResponse represents a response from the Google DNS-over-HTTPS servers
 type GDNSResponse struct {
 	Status           int32         `json:"Status,omitempty"`
 	TC               bool          `json:"TC,omitempty"`
@@ -72,7 +80,8 @@ type GDNSResponse struct {
 	Comment          string        `json:"Comment,omitempty"`
 }
 
-// GDNSProvider is the Google DNS-over-HTTPS provider
+// GDNSProvider is the Google DNS-over-HTTPS provider; it implements the
+// Provider interface.
 type GDNSProvider struct {
 	Endpoint string
 	Pad      bool
