@@ -5,6 +5,7 @@ go:
 install:
 - go get -u -v github.com/fardog/secureoperator
 - go get -u -v github.com/fardog/secureoperator/cmd/secure-operator
+before_deploy: "make release"
 deploy:
   provider: releases
   api_key:
