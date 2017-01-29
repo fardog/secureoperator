@@ -40,7 +40,7 @@ The `latest` tag will always be the build from the `master` branch. If you wish
 to use one of the stable releases, use its version tag when pulling, e.g.:
 
 ```
-docker pull fardog/secureoperator:v1.0.2
+docker pull fardog/secureoperator:v1.0.3
 ```
 
 ## Security
@@ -63,7 +63,6 @@ consider the following:
 * No caching is implemented, and probably never will. If you need caching, put
   your `secure-operator` server behind another DNS server which provides
   caching.
-* Build docker images automatically via travis
 
 ## Acknowledgments
 
