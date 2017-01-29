@@ -36,9 +36,12 @@ There is a [Docker][docker] image available for secureoperator:
 docker pull fardog/secureoperator
 ```
 
-The `latest` tag will always be the most recently tagged release. For now these
-builds are being done manually, so if they are out of date please
-[file an issue][issues] so that I can get them updated.
+The `latest` tag will always be the build from the `master` branch. If you wish
+to use one of the stable releases, use its version tag when pulling, e.g.:
+
+```
+docker pull fardog/secureoperator:v1.0.2
+```
 
 ## Security
 
