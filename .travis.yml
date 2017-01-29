@@ -22,3 +22,4 @@ deploy:
   on:
     repo: fardog/secureoperator
     tags: true
+    go: 1.7
