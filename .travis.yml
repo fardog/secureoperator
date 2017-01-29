@@ -5,7 +5,22 @@ go:
   - tip
 
 install:
-  - go get github.com/fardog/secureoperator
+  - go get -u -v github.com/fardog/secureoperator
+  - go get -u -v github.com/fardog/secureoperator/cmd/secure-operator
 
-script:
-  - go test -v ./
+deploy:
+  provider: releases
+  api_key:
+    secure: "X7zzkohPiTbzPfgwFtoWtFcFXumFbT71IRlSkhRlzaDxSfrTcZIxzSG3lZkkOZnMNTlGvVvR1H0ie3eW6UrYemr/VjxfdEOHb0DB50kk2AoZ6mfQ4YvCJQpD0hPamkbrq1/GDr1C5Eoz0q73Z8cplxtgglI9PsnQBDe3t0ymIyG0PNqr/ftHSvvWFrN+/PHB4EFlXvOAttoD9nVsHhiR1/ZO/xyId6qN8QqqQTmk0p+kreVV76m6PQu267gc8gQqjBv8Lrz8OszInFfox+jsbk5gTOCc42oNHcaHDjKsifREh1be7wjga8eP2jTPTWnaAxb+2JFvkkRJ33gtrxtHiJ7CN2g+mXcaYf0QZuaMoMUv0wni94HkNEHMHL6yxGqQEQtotmvR4viwK1yB74hD81zz+q+vkJ0Fqwb5Biq0IL3T8dhcZ+e9P4iZLkDJf2h7Ta/DAHBYeSuH3WSqa2C//LcnxmbkxalX38MNI2XtK8uQWMsSmK4jVYYEeuyPhAmr59TyKWouvff+zUuoVXuiliWPpjqW+88tw8wqh99MErfatbIgL4Bc5I63+uyQBE91R9KS0+yepDTgCpjPnGsdDdK9sET9AG8uT0azQ2/N3/zzGYgMfA135H+vjzJRjhGpFS3kg70M3iEDMs4/NwByW/L5kRLamr+gO6G0W9ehfOU="
+  file:
+    - release/secure-operator_linux-amd64
+    - release/secure-operator_linux-386
+    - release/secure-operator_linux-arm
+    - release/secure-operator_macos-amd64
+    - release/secure-operator_macos-386
+    - release/secure-operator_windows-amd64.exe
+    - release/secure-operator_windows-386.exe
+  skip_cleanup: true
+  on:
+    repo: fardog/secureoperator
+    tags: true
