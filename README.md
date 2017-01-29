@@ -28,6 +28,18 @@ information, run `secure-operator --help`.
 **Note:** Running a service on port `53` requires administrative privileges on
 most systems.
 
+### Docker
+
+There is a [Docker][docker] image available for secureoperator:
+
+```
+docker pull fardog/secureoperator
+```
+
+The `latest` tag will always be the most recently tagged release. For now these
+builds are being done manually, so if they are out of date please
+[file an issue][issues] so that I can get them updated.
+
 ## Security
 
 Note that while DNS requests are made over HTTPS, this does not imply "secure";
@@ -48,6 +60,7 @@ consider the following:
 * No caching is implemented, and probably never will. If you need caching, put
   your `secure-operator` server behind another DNS server which provides
   caching.
+* Build docker images automatically via travis
 
 ## Acknowledgments
 
@@ -72,3 +85,5 @@ This owes heavily to the following work:
 [dnsoverhttps]: https://developers.google.com/speed/public-dns/docs/dns-over-https
 [googlednspriv]: https://developers.google.com/speed/public-dns/privacy
 [releases]: https://github.com/fardog/secureoperator/releases
+[docker]: https://www.docker.com/
+[issues]: https://github.com/fardog/secureoperator/issues
