@@ -9,13 +9,14 @@ records across the internet using HTTPS.
 
 ## Installation
 
-A binary build is not yet available. For now, install using `go get`:
+You may retrieve binaries from [the releases page][releases], or install using
+`go get`:
 
 ```
 go get -u github.com/fardog/secureoperator/cmd/secure-operator
 ```
 
-Then, run:
+Then either run the binary you downloaded, or the built package:
 
 ```
 secure-operator
@@ -70,3 +71,4 @@ This owes heavily to the following work:
 
 [dnsoverhttps]: https://developers.google.com/speed/public-dns/docs/dns-over-https
 [googlednspriv]: https://developers.google.com/speed/public-dns/privacy
+[releases]: https://github.com/fardog/secureoperator/releases
