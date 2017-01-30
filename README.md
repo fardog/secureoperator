@@ -57,8 +57,6 @@ consider the following:
 ## Caveats/TODO
 
 * Currently only the following records are supported: `A, AAAA, CNAME, MX`
-* Padding is not very smart; it just always pads to 1024 characters, and fails
-  if the URL would've been larger than that
 * More thorough tests should be written
 * No caching is implemented, and probably never will. If you need caching, put
   your `secure-operator` server behind another DNS server which provides

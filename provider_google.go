@@ -6,9 +6,12 @@ import (
 	"net/http"
 )
 
-var (
-	targetPaddedLength = 1024
-	paddingParameter   = "random_padding"
+const (
+	// DNSNameMaxBytes is the maximum number of bytes a DNS name may contain
+	DNSNameMaxBytes = 253
+	// max number of characters in a 16-bit uint integer, converted to string
+	extraPad         = 5
+	paddingParameter = "random_padding"
 )
 
 // GDNSQuestion represents a question response item from Google's DNS service
@@ -95,23 +98,24 @@ func (g GDNSProvider) Query(q DNSQuestion) (*DNSResponse, error) {
 	}
 
 	qry := httpreq.URL.Query()
+	dnsType := fmt.Sprintf("%v", q.Type)
+
+	l := len([]byte(q.Name))
+	if l > DNSNameMaxBytes {
+		return nil, fmt.Errorf("name length of %v exceeds DNS name max length", l)
+	}
 
 	qry.Add("name", q.Name)
-	qry.Add("type", fmt.Sprintf("%v", q.Type))
+	qry.Add("type", dnsType)
 	qry.Add("edns_client_subnet", "0.0.0.0/0")
 
 	httpreq.URL.RawQuery = qry.Encode()
 
-	// if padding was requested, pad to the target padding length
-	// TODO: this needs to be smarter; should be padding to more sane lengths
-	// except for very large name requests
 	if g.Pad {
-		l := len(httpreq.URL.String()) + len(paddingParameter) + 1
-
-		if l > targetPaddedLength {
-			return nil, fmt.Errorf("failed to pad; query was already of length: %v", l)
-		}
-		pad := randSeq(targetPaddedLength - l)
+		// pad to the maximum size a valid request could be. we add `1` because
+		// Google's DNS service ignores a trailing period, increasing the
+		// possible size of a name by 1
+		pad := randSeq(DNSNameMaxBytes + extraPad - l - len(dnsType) + 1)
 		qry.Add(paddingParameter, pad)
 
 		httpreq.URL.RawQuery = qry.Encode()
