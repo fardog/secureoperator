@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/miekg/dns"
@@ -27,6 +28,7 @@ func TestQuery(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		fmt.Fprint(w, gresp)
 	}))
+	defer ts.Close()
 
 	g := GDNSProvider{
 		Endpoint: ts.URL,
@@ -45,7 +47,7 @@ func TestQuery(t *testing.T) {
 	if a.Name != "example.com." {
 		t.Errorf("unexpected name %v", a.Name)
 	}
-	if a.Type != 1 {
+	if a.Type != dns.TypeA {
 		t.Errorf("unexpected type %v", a.Type)
 	}
 	if a.Data != "93.184.216.34" {
@@ -57,5 +59,71 @@ func TestQuery(t *testing.T) {
 
 	if resp.ResponseCode != 0 {
 		t.Errorf("unexpected response code %v", resp.ResponseCode)
+	}
+}
+
+func TestPadding(t *testing.T) {
+	var expected int
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		l := len([]byte(r.URL.String()))
+		// first request, set the expectation to the length of the first URL we
+		// see; if any others don't match it, our padding function fails
+		if expected == 0 {
+			expected = l
+		}
+
+		if l != expected {
+			t.Errorf("unexpected URL length: %v, expected: %v", l, expected)
+		}
+
+		w.WriteHeader(http.StatusOK)
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, gresp)
+	}))
+	defer ts.Close()
+
+	g := GDNSProvider{
+		Endpoint: ts.URL,
+		Pad:      true,
+	}
+
+	questions := []DNSQuestion{
+		DNSQuestion{Name: "whatever.yo", Type: dns.TypeA},
+		// ensure differing types result in the same padded length
+		DNSQuestion{Name: "sure.yep", Type: dns.TypeA},
+		DNSQuestion{Name: "sure.yep", Type: dns.TypeMX},
+		DNSQuestion{Name: "sure.yep", Type: dns.TypeTA},
+		// ensure very long domains are fine
+		DNSQuestion{Name: strings.Repeat("a", 253), Type: dns.TypeA},
+		DNSQuestion{Name: strings.Repeat("a", 253), Type: dns.TypeTA},
+	}
+
+	for _, q := range questions {
+		if _, err := g.Query(q); err != nil {
+			t.Errorf(err.Error())
+		}
+
+	}
+
+	// a name longer that 253 bytes should be an error
+	if _, err := g.Query(DNSQuestion{Name: strings.Repeat("a", 254)}); err == nil {
+		t.Errorf("expected an error for a too-long DNS name")
+	}
+}
+
+func TestNameTooLong(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Errorf("no request should be made")
+	}))
+	defer ts.Close()
+
+	g := GDNSProvider{
+		Endpoint: ts.URL,
+		Pad:      true,
+	}
+
+	// a name longer that 253 bytes should be an error
+	if _, err := g.Query(DNSQuestion{Name: strings.Repeat("a", 254)}); err == nil {
+		t.Errorf("expected an error for a too-long DNS name")
 	}
 }
