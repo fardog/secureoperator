@@ -25,7 +25,7 @@ var (
 	pad = flag.Bool(
 		"pad",
 		true,
-		"Randomly pad requests to vary request length",
+		"Pad requests to identical length",
 	)
 
 	logLevel = flag.String(
