@@ -25,7 +25,7 @@ var (
 	pad = flag.Bool(
 		"pad",
 		true,
-		"Randomly pad requests to vary request length",
+		"Pad Google DNS-over-HTTPS requests to identical length",
 	)
 
 	logLevel = flag.String(

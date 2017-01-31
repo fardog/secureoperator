@@ -43,6 +43,16 @@ to use one of the stable releases, use its version tag when pulling, e.g.:
 docker pull fardog/secureoperator:v1.0.3
 ```
 
+## Version Compatibility
+
+This package follows [semver][] for its tagged releases. The `master` branch is
+always considered stable, but may break API compatibility. If you require API
+stability, either use the tagged releases or mirror on gopkg.in:
+
+```
+go get -u gopkg.in/fardog/secureoperator.v1
+```
+
 ## Security
 
 Note that while DNS requests are made over HTTPS, this does not imply "secure";
@@ -87,3 +97,4 @@ This owes heavily to the following work:
 [releases]: https://github.com/fardog/secureoperator/releases
 [docker]: https://www.docker.com/
 [issues]: https://github.com/fardog/secureoperator/issues
+[semver]: http://semver.org/
