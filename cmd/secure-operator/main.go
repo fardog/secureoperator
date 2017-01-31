@@ -25,7 +25,7 @@ var (
 	pad = flag.Bool(
 		"pad",
 		true,
-		"Pad requests to identical length",
+		"Pad Google DNS-over-HTTPS requests to identical length",
 	)
 
 	logLevel = flag.String(
