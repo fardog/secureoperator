@@ -72,29 +72,6 @@ func (r DNSRR) RR() dns.RR {
 
 			v.Preference = uint16(pref)
 			v.Mx = c[1]
-		case *dns.SOA:
-			c := strings.Split(r.Data, " ")
-			if len(c) != 7 {
-				break
-			}
-
-			var errs []error
-			parseUint32 := func(s string) uint32 {
-				u, err := strconv.ParseUint(s, 10, 32)
-				if err != nil {
-					errs = append(errs, err)
-				}
-
-				return uint32(u)
-			}
-
-			v.Ns = c[0]
-			v.Mbox = c[1]
-			v.Serial = parseUint32(c[2])
-			v.Refresh = parseUint32(c[3])
-			v.Retry = parseUint32(c[4])
-			v.Expire = parseUint32(c[5])
-			v.Minttl = parseUint32(c[6])
 		}
 	} else {
 		rr = dns.RR(&dns.RFC3597{
