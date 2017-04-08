@@ -3,6 +3,7 @@ package secureoperator
 import (
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 )
 
@@ -86,8 +87,10 @@ type GDNSResponse struct {
 // GDNSProvider is the Google DNS-over-HTTPS provider; it implements the
 // Provider interface.
 type GDNSProvider struct {
-	Endpoint string
-	Pad      bool
+	Endpoint    string
+	Pad         bool
+	EndpointIPs []net.IP
+	DNSServers  []net.IP
 }
 
 // Query sends a DNS question to Google, and returns the response
