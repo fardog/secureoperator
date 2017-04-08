@@ -84,18 +84,41 @@ type GDNSResponse struct {
 	Comment          string        `json:"Comment,omitempty"`
 }
 
+// GDNSOptions is a configuration object for optional GDNSProvider configuration
+type GDNSOptions struct {
+	// Pad specifies if a DNS request should be padded to a fixed length
+	Pad bool
+	// EndpointIPs is a list of IPs to be used as the GDNS endpoint, avoiding
+	// DNS lookups in the case where they are provided. One is chosen randomly
+	// for each request.
+	EndpointIPs []net.IP
+	// DNSServers is a list of Endpoints to be used as DNS servers when looking
+	// up the endpoint; if not provided, the system DNS resolver is used.
+	DNSServers Endpoints
+}
+
+// NewGDNSProvider creates a GDNSProvider
+func NewGDNSProvider(endpoint string, opts *GDNSOptions) *GDNSProvider {
+	if opts == nil {
+		opts = &GDNSOptions{}
+	}
+
+	return &GDNSProvider{
+		endpoint: endpoint,
+		opts:     opts,
+	}
+}
+
 // GDNSProvider is the Google DNS-over-HTTPS provider; it implements the
 // Provider interface.
 type GDNSProvider struct {
-	Endpoint    string
-	Pad         bool
-	EndpointIPs []net.IP
-	DNSServers  []net.IP
+	endpoint string
+	opts     *GDNSOptions
 }
 
 // Query sends a DNS question to Google, and returns the response
 func (g GDNSProvider) Query(q DNSQuestion) (*DNSResponse, error) {
-	httpreq, err := http.NewRequest(http.MethodGet, g.Endpoint, nil)
+	httpreq, err := http.NewRequest(http.MethodGet, g.endpoint, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -114,7 +137,7 @@ func (g GDNSProvider) Query(q DNSQuestion) (*DNSResponse, error) {
 
 	httpreq.URL.RawQuery = qry.Encode()
 
-	if g.Pad {
+	if g.opts.Pad {
 		// pad to the maximum size a valid request could be. we add `1` because
 		// Google's DNS service ignores a trailing period, increasing the
 		// possible size of a name by 1

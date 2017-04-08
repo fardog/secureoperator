@@ -51,7 +51,8 @@ var (
 		"dns-servers",
 		"",
 		`DNS Servers used to look up the endpoint; system default is used if absent.
-        Ignored if "endpoint-ips" is set. Comma separated, e.g. "8.8.8.8,8.8.4.4".`,
+        Ignored if "endpoint-ips" is set. Comma separated, e.g. "8.8.8.8,8.8.4.4:53".
+        The port section is optional, and 53 will be used by default.`,
 	)
 
 	enableTCP = flag.Bool("tcp", true, "Listen on TCP")
@@ -99,17 +100,16 @@ func main() {
 	if err != nil {
 		log.Fatalf("error parsing endpoint-ips: %v", err)
 	}
-	dips, err := cmd.CSVtoIPs(*dnsServers)
+	dips, err := cmd.CSVtoEndpoints(*dnsServers)
 	if err != nil {
 		log.Fatalf("error parsing dns-servers: %v", err)
 	}
 
-	provider := secop.GDNSProvider{
-		Endpoint:    *endpoint,
+	provider := secop.NewGDNSProvider(*endpoint, &secop.GDNSOptions{
 		Pad:         *pad,
 		EndpointIPs: eips,
 		DNSServers:  dips,
-	}
+	})
 	options := &secop.HandlerOptions{}
 	handler := secop.NewHandler(provider, options)
 
