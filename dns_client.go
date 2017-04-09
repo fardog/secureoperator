@@ -49,7 +49,7 @@ type Endpoint struct {
 }
 
 func (e Endpoint) String() string {
-	return net.JoinHostPort(e.IP.String(), string(e.Port))
+	return net.JoinHostPort(e.IP.String(), fmt.Sprintf("%v", e.Port))
 }
 
 // Endpoints is a list of Endpoint objects
@@ -132,5 +132,5 @@ func (c *SimpleDNSClient) LookupIP(host string) ([]net.IP, error) {
 	// cache the record
 	c.cache[host] = rec
 
-	return entry.ips, nil
+	return rec.ips, nil
 }

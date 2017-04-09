@@ -1,10 +1,13 @@
 package secureoperator
 
 import (
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
+	"math/rand"
 	"net"
 	"net/http"
+	"net/url"
 )
 
 const (
@@ -98,27 +101,69 @@ type GDNSOptions struct {
 }
 
 // NewGDNSProvider creates a GDNSProvider
-func NewGDNSProvider(endpoint string, opts *GDNSOptions) *GDNSProvider {
+func NewGDNSProvider(endpoint string, opts *GDNSOptions) (*GDNSProvider, error) {
 	if opts == nil {
 		opts = &GDNSOptions{}
 	}
 
-	return &GDNSProvider{
+	u, err := url.Parse(endpoint)
+	if err != nil {
+		return nil, err
+	}
+
+	g := &GDNSProvider{
 		endpoint: endpoint,
+		url:      u,
+		host:     u.Host,
 		opts:     opts,
 	}
+
+	if len(opts.DNSServers) > 0 {
+		d, err := NewSimpleDNSClient(opts.DNSServers)
+		if err != nil {
+			return nil, err
+		}
+
+		g.dns = d
+	}
+
+	return g, nil
 }
 
 // GDNSProvider is the Google DNS-over-HTTPS provider; it implements the
 // Provider interface.
 type GDNSProvider struct {
 	endpoint string
+	url      *url.URL
+	host     string
 	opts     *GDNSOptions
+	dns      *SimpleDNSClient
 }
 
-// Query sends a DNS question to Google, and returns the response
-func (g GDNSProvider) Query(q DNSQuestion) (*DNSResponse, error) {
-	httpreq, err := http.NewRequest(http.MethodGet, g.endpoint, nil)
+func (g GDNSProvider) newRequest(q DNSQuestion) (*http.Request, error) {
+	u := *g.url
+
+	var mustSendHost bool
+
+	if l := len(g.opts.EndpointIPs); l > 0 {
+		// if endpointIPs are provided, use one of those
+		u.Host = g.opts.EndpointIPs[rand.Intn(l)].String()
+		mustSendHost = true
+	} else if g.dns != nil {
+		ips, err := g.dns.LookupIP(u.Host)
+		if err != nil {
+			return nil, err
+		}
+
+		if l := len(ips); l > 0 {
+			u.Host = ips[rand.Intn(l)].String()
+		} else {
+			return nil, fmt.Errorf("lookup for Google DNS host %v failed", u.Host)
+		}
+		mustSendHost = true
+	}
+
+	httpreq, err := http.NewRequest(http.MethodGet, u.String(), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -147,7 +192,28 @@ func (g GDNSProvider) Query(q DNSQuestion) (*DNSResponse, error) {
 		httpreq.URL.RawQuery = qry.Encode()
 	}
 
-	httpresp, err := http.DefaultClient.Do(httpreq)
+	if mustSendHost {
+		httpreq.Host = g.url.Host
+	}
+
+	return httpreq, nil
+}
+
+// Query sends a DNS question to Google, and returns the response
+func (g GDNSProvider) Query(q DNSQuestion) (*DNSResponse, error) {
+	httpreq, err := g.newRequest(q)
+	if err != nil {
+		return nil, err
+	}
+
+	// custom transport for supporting servernames which may not match the url,
+	// in cases where we request directly against an IP
+	tr := &http.Transport{
+		TLSClientConfig: &tls.Config{ServerName: g.url.Host},
+	}
+	client := &http.Client{Transport: tr}
+
+	httpresp, err := client.Do(httpreq)
 	if err != nil {
 		return nil, err
 	}

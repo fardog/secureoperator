@@ -105,11 +105,14 @@ func main() {
 		log.Fatalf("error parsing dns-servers: %v", err)
 	}
 
-	provider := secop.NewGDNSProvider(*endpoint, &secop.GDNSOptions{
+	provider, err := secop.NewGDNSProvider(*endpoint, &secop.GDNSOptions{
 		Pad:         *pad,
 		EndpointIPs: eips,
 		DNSServers:  dips,
 	})
+	if err != nil {
+		log.Fatal(err)
+	}
 	options := &secop.HandlerOptions{}
 	handler := secop.NewHandler(provider, options)
 
