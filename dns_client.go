@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	log "github.com/Sirupsen/logrus"
 	"github.com/miekg/dns"
 )
 
@@ -95,6 +96,7 @@ func (c *SimpleDNSClient) LookupIP(host string) ([]net.IP, error) {
 	// see if cache has the entry; if it's still good, return it
 	entry, ok := c.cache[host]
 	if ok && entry.expires.After(time.Now()) {
+		log.Debugf("simple dns cache hit for %v\n", host)
 		return entry.ips, nil
 	}
 
@@ -103,6 +105,7 @@ func (c *SimpleDNSClient) LookupIP(host string) ([]net.IP, error) {
 	msg := dns.Msg{}
 	msg.SetQuestion(dns.Fqdn(host), dns.TypeA)
 
+	log.Infof("simple dns lookup %v\n")
 	r, err := dns.Exchange(&msg, server.String())
 	if err != nil {
 		return []net.IP{}, err
