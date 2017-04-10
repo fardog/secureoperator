@@ -68,6 +68,15 @@ type dnsCacheRecord struct {
 	expires time.Time
 }
 
+func newDNSCache() *dnsCache {
+	mutex := sync.Mutex{}
+
+	return &dnsCache{
+		mutex:   &mutex,
+		records: make(map[string]dnsCacheRecord, 10),
+	}
+}
+
 type dnsCache struct {
 	mutex   *sync.Mutex
 	records map[string]dnsCacheRecord
@@ -94,9 +103,10 @@ func NewSimpleDNSClient(servers Endpoints) (*SimpleDNSClient, error) {
 	if len(servers) < 1 {
 		return nil, fmt.Errorf("at least one endpoint server is required")
 	}
+
 	return &SimpleDNSClient{
 		servers: servers,
-		cache:   dnsCache{},
+		cache:   newDNSCache(),
 	}, nil
 }
 
@@ -107,7 +117,7 @@ func NewSimpleDNSClient(servers Endpoints) (*SimpleDNSClient, error) {
 // at a time only.
 type SimpleDNSClient struct {
 	servers Endpoints
-	cache   dnsCache
+	cache   *dnsCache
 }
 
 // LookupIP looks up a single IP against the client's configured DNS servers,
@@ -125,7 +135,7 @@ func (c *SimpleDNSClient) LookupIP(host string) ([]net.IP, error) {
 	msg := dns.Msg{}
 	msg.SetQuestion(dns.Fqdn(host), dns.TypeA)
 
-	log.Infof("simple dns lookup %v\n")
+	log.Infof("simple dns lookup %v\n", host)
 	r, err := dns.Exchange(&msg, server.String())
 	if err != nil {
 		return []net.IP{}, err
