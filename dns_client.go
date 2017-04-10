@@ -7,6 +7,7 @@ import (
 	"net"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	log "github.com/Sirupsen/logrus"
@@ -67,7 +68,26 @@ type dnsCacheRecord struct {
 	expires time.Time
 }
 
-type dnsCache map[string]dnsCacheRecord
+type dnsCache struct {
+	mutex   *sync.Mutex
+	records map[string]dnsCacheRecord
+}
+
+func (d *dnsCache) Get(key string) (dnsCacheRecord, bool) {
+	d.mutex.Lock()
+	defer d.mutex.Unlock()
+
+	rec, ok := d.records[key]
+
+	return rec, ok
+}
+
+func (d *dnsCache) Set(key string, rec dnsCacheRecord) {
+	d.mutex.Lock()
+	defer d.mutex.Unlock()
+
+	d.records[key] = rec
+}
 
 // NewSimpleDNSClient creates a SimpleDNSClient
 func NewSimpleDNSClient(servers Endpoints) (*SimpleDNSClient, error) {
@@ -94,7 +114,7 @@ type SimpleDNSClient struct {
 // returning a value from cache if its still valid.
 func (c *SimpleDNSClient) LookupIP(host string) ([]net.IP, error) {
 	// see if cache has the entry; if it's still good, return it
-	entry, ok := c.cache[host]
+	entry, ok := c.cache.Get(host)
 	if ok && entry.expires.After(time.Now()) {
 		log.Debugf("simple dns cache hit for %v\n", host)
 		return entry.ips, nil
@@ -133,7 +153,7 @@ func (c *SimpleDNSClient) LookupIP(host string) ([]net.IP, error) {
 	rec.expires = time.Now().Add(time.Second * time.Duration(shortestTTL))
 
 	// cache the record
-	c.cache[host] = rec
+	c.cache.Set(host, rec)
 
 	return rec.ips, nil
 }
