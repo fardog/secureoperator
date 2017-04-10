@@ -20,10 +20,10 @@ var (
 		"listen", ":53", "listen address, as `[host]:port`",
 	)
 
-	pad = flag.Bool(
-		"pad",
-		true,
-		"Pad Google DNS-over-HTTPS requests to identical length",
+	noPad = flag.Bool(
+		"no-pad",
+		false,
+		"Disable padding of Google DNS-over-HTTPS requests to identical length",
 	)
 
 	logLevel = flag.String(
@@ -106,7 +106,7 @@ func main() {
 	}
 
 	provider, err := secop.NewGDNSProvider(*endpoint, &secop.GDNSOptions{
-		Pad:         *pad,
+		Pad:         !*noPad,
 		EndpointIPs: eips,
 		DNSServers:  dips,
 	})
