@@ -1,9 +1,13 @@
 package secureoperator
 
 import (
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
+	"math/rand"
+	"net"
 	"net/http"
+	"net/url"
 )
 
 const (
@@ -83,16 +87,83 @@ type GDNSResponse struct {
 	Comment          string        `json:"Comment,omitempty"`
 }
 
+// GDNSOptions is a configuration object for optional GDNSProvider configuration
+type GDNSOptions struct {
+	// Pad specifies if a DNS request should be padded to a fixed length
+	Pad bool
+	// EndpointIPs is a list of IPs to be used as the GDNS endpoint, avoiding
+	// DNS lookups in the case where they are provided. One is chosen randomly
+	// for each request.
+	EndpointIPs []net.IP
+	// DNSServers is a list of Endpoints to be used as DNS servers when looking
+	// up the endpoint; if not provided, the system DNS resolver is used.
+	DNSServers Endpoints
+}
+
+// NewGDNSProvider creates a GDNSProvider
+func NewGDNSProvider(endpoint string, opts *GDNSOptions) (*GDNSProvider, error) {
+	if opts == nil {
+		opts = &GDNSOptions{}
+	}
+
+	u, err := url.Parse(endpoint)
+	if err != nil {
+		return nil, err
+	}
+
+	g := &GDNSProvider{
+		endpoint: endpoint,
+		url:      u,
+		host:     u.Host,
+		opts:     opts,
+	}
+
+	if len(opts.DNSServers) > 0 {
+		d, err := NewSimpleDNSClient(opts.DNSServers)
+		if err != nil {
+			return nil, err
+		}
+
+		g.dns = d
+	}
+
+	return g, nil
+}
+
 // GDNSProvider is the Google DNS-over-HTTPS provider; it implements the
 // Provider interface.
 type GDNSProvider struct {
-	Endpoint string
-	Pad      bool
+	endpoint string
+	url      *url.URL
+	host     string
+	opts     *GDNSOptions
+	dns      *SimpleDNSClient
 }
 
-// Query sends a DNS question to Google, and returns the response
-func (g GDNSProvider) Query(q DNSQuestion) (*DNSResponse, error) {
-	httpreq, err := http.NewRequest(http.MethodGet, g.Endpoint, nil)
+func (g GDNSProvider) newRequest(q DNSQuestion) (*http.Request, error) {
+	u := *g.url
+
+	var mustSendHost bool
+
+	if l := len(g.opts.EndpointIPs); l > 0 {
+		// if endpointIPs are provided, use one of those
+		u.Host = g.opts.EndpointIPs[rand.Intn(l)].String()
+		mustSendHost = true
+	} else if g.dns != nil {
+		ips, err := g.dns.LookupIP(u.Host)
+		if err != nil {
+			return nil, err
+		}
+
+		if l := len(ips); l > 0 {
+			u.Host = ips[rand.Intn(l)].String()
+		} else {
+			return nil, fmt.Errorf("lookup for Google DNS host %v failed", u.Host)
+		}
+		mustSendHost = true
+	}
+
+	httpreq, err := http.NewRequest(http.MethodGet, u.String(), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -111,7 +182,7 @@ func (g GDNSProvider) Query(q DNSQuestion) (*DNSResponse, error) {
 
 	httpreq.URL.RawQuery = qry.Encode()
 
-	if g.Pad {
+	if g.opts.Pad {
 		// pad to the maximum size a valid request could be. we add `1` because
 		// Google's DNS service ignores a trailing period, increasing the
 		// possible size of a name by 1
@@ -121,7 +192,28 @@ func (g GDNSProvider) Query(q DNSQuestion) (*DNSResponse, error) {
 		httpreq.URL.RawQuery = qry.Encode()
 	}
 
-	httpresp, err := http.DefaultClient.Do(httpreq)
+	if mustSendHost {
+		httpreq.Host = g.url.Host
+	}
+
+	return httpreq, nil
+}
+
+// Query sends a DNS question to Google, and returns the response
+func (g GDNSProvider) Query(q DNSQuestion) (*DNSResponse, error) {
+	httpreq, err := g.newRequest(q)
+	if err != nil {
+		return nil, err
+	}
+
+	// custom transport for supporting servernames which may not match the url,
+	// in cases where we request directly against an IP
+	tr := &http.Transport{
+		TLSClientConfig: &tls.Config{ServerName: g.url.Host},
+	}
+	client := &http.Client{Transport: tr}
+
+	httpresp, err := client.Do(httpreq)
 	if err != nil {
 		return nil, err
 	}

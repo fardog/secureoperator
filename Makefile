@@ -15,4 +15,4 @@ release:
 	GOOS=windows GOARCH=386 go build -o release/secure-operator_windows-386.exe $(cmd_package)
 
 test:
-	go test -v ./
+	go test -v ./ ./cmd

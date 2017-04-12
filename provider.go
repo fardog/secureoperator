@@ -45,13 +45,13 @@ func (r DNSRR) RR() dns.RR {
 	// Build an RR header
 	rrhdr := dns.RR_Header{
 		Name:     r.Name,
-		Rrtype:   uint16(r.Type),
+		Rrtype:   r.Type,
 		Class:    dns.ClassINET,
-		Ttl:      uint32(r.TTL),
+		Ttl:      r.TTL,
 		Rdlength: uint16(len(r.Data)),
 	}
 
-	constructor, ok := dns.TypeToRR[uint16(r.Type)]
+	constructor, ok := dns.TypeToRR[r.Type]
 	if ok {
 		// Construct a new RR
 		rr = constructor()

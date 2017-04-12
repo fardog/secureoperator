@@ -40,7 +40,7 @@ The `latest` tag will always be the build from the `master` branch. If you wish
 to use one of the stable releases, use its version tag when pulling, e.g.:
 
 ```
-docker pull fardog/secureoperator:v1.0.3
+docker pull fardog/secureoperator:v2.0.0
 ```
 
 ## Version Compatibility
@@ -50,7 +50,7 @@ always considered stable, but may break API compatibility. If you require API
 stability, either use the tagged releases or mirror on gopkg.in:
 
 ```
-go get -u gopkg.in/fardog/secureoperator.v1
+go get -u gopkg.in/fardog/secureoperator.v2
 ```
 
 ## Security
@@ -60,9 +60,17 @@ consider the following:
 
 * You must trust Google with your requests, see
   [their privacy statement][googlednspriv] for further details.
-* The initial lookup for the Google DNS endpoint happens over plain DNS using
-  your locally configured DNS resolver; there are plans to mitigate this in the
-  future, but at least _one_ DNS request will be sent unsecured.
+* The lookup for the Google DNS endpoint must happen in _some_ regard, although
+  how this is handled is up to you:
+    * The system DNS resolver is used to look up the endpoint (default)
+    * You provide a list of DNS servers to use for the endpoint lookup
+    * You provide the IP address(es) to the endpoint; and no unencrypted DNS
+      lookup will be performed. However if the addresses change while the
+      service is running, you will need to restart the service to provide new
+      addresses.
+      
+Information on the usage of these options is available with
+`secure-operator --help`. 
   
 ## Caveats/TODO
 
@@ -70,7 +78,8 @@ consider the following:
 * More thorough tests should be written
 * No caching is implemented, and probably never will. If you need caching, put
   your `secure-operator` server behind another DNS server which provides
-  caching.
+  caching. (TODO: write instructions on setup, or provide a docker-compose
+  configuration.)
 
 ## Acknowledgments
 

@@ -4,6 +4,7 @@ go:
 - tip
 install:
 - go get -u -v github.com/fardog/secureoperator
+- go get -u -v github.com/fardog/secureoperator/cmd
 - go get -u -v github.com/fardog/secureoperator/cmd/secure-operator
 before_deploy: "make release"
 deploy:

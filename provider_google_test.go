@@ -30,9 +30,9 @@ func TestQuery(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	g := GDNSProvider{
-		Endpoint: ts.URL,
-		Pad:      false,
+	g, err := NewGDNSProvider(ts.URL, nil)
+	if err != nil {
+		t.Fatal(err)
 	}
 
 	resp, err := g.Query(DNSQuestion{
@@ -82,9 +82,9 @@ func TestPadding(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	g := GDNSProvider{
-		Endpoint: ts.URL,
-		Pad:      true,
+	g, err := NewGDNSProvider(ts.URL, &GDNSOptions{Pad: true})
+	if err != nil {
+		t.Fatal(err)
 	}
 
 	questions := []DNSQuestion{
@@ -117,9 +117,9 @@ func TestNameTooLong(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	g := GDNSProvider{
-		Endpoint: ts.URL,
-		Pad:      true,
+	g, err := NewGDNSProvider(ts.URL, &GDNSOptions{Pad: true})
+	if err != nil {
+		t.Fatal(err)
 	}
 
 	// a name longer that 253 bytes should be an error
