@@ -14,6 +14,11 @@ import (
 	"github.com/miekg/dns"
 )
 
+var (
+	ErrInvalidEndpointString = errors.New("invalid endpoint string")
+	ErrFailedParsingIP       = errors.New("unable to parse IP from string")
+)
+
 // ParseEndpoint parses a string into an Endpoint object, where the endpoint
 // string is in the format of "ip:port". If a port is not present in the string,
 // the defaultPort is used.
@@ -21,12 +26,12 @@ func ParseEndpoint(endpoint string, defaultPort uint16) (ep Endpoint, err error)
 	e := strings.Split(endpoint, ":")
 
 	if len(e) > 2 {
-		return ep, errors.New("invalid format")
+		return ep, ErrInvalidEndpointString
 	}
 
 	ip := net.ParseIP(e[0])
 	if ip == nil {
-		return ep, fmt.Errorf("unable to parse IP from string %s", e[0])
+		return ep, ErrFailedParsingIP
 	}
 
 	ep.IP = ip
