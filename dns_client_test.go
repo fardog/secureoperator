@@ -1,10 +1,12 @@
 package secureoperator
 
 import (
+	"errors"
 	"net"
 	"testing"
 	"time"
 
+	log "github.com/Sirupsen/logrus"
 	"github.com/miekg/dns"
 )
 
@@ -109,9 +111,15 @@ func TestDNSCache(t *testing.T) {
 
 func TestSimpleDNSClient(t *testing.T) {
 	exch := exchange
-	defer func() { exchange = exch }()
+	level := log.GetLevel()
+	defer func() {
+		exchange = exch
+		log.SetLevel(level)
+	}()
 
 	var callCount int
+
+	log.SetLevel(log.FatalLevel)
 	exchange = func(m *dns.Msg, a string) (*dns.Msg, error) {
 		callCount++
 
@@ -125,7 +133,10 @@ func TestSimpleDNSClient(t *testing.T) {
 
 		r := dns.Msg{
 			Answer: []dns.RR{
-				&dns.A{A: net.ParseIP("1.2.3.4")},
+				&dns.A{
+					A:   net.ParseIP("1.2.3.4"),
+					Hdr: dns.RR_Header{Ttl: 300},
+				},
 			},
 		}
 		r.SetReply(m)
@@ -133,9 +144,9 @@ func TestSimpleDNSClient(t *testing.T) {
 		return &r, nil
 	}
 
+	// test first call, should hit resolver
 	client, err := NewSimpleDNSClient(Endpoints{
 		Endpoint{net.ParseIP("8.8.8.8"), 53},
-		Endpoint{net.ParseIP("8.8.4.4"), 53},
 	})
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
@@ -146,11 +157,62 @@ func TestSimpleDNSClient(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	if callCount != 1 {
+		t.Error("expected call to exchange")
+	}
+
 	if len(ips) != 1 {
 		t.Fatal("expected only one answer")
 	}
 
 	if ip := ips[0].String(); ip != "1.2.3.4" {
 		t.Errorf("unexpected response: %v", ip)
+	}
+
+	ips, err = client.LookupIP("google.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if callCount != 1 {
+		t.Error("expected no additional call to exchange")
+	}
+
+	if len(ips) != 1 {
+		t.Fatal("expected only one answer")
+	}
+
+	if ip := ips[0].String(); ip != "1.2.3.4" {
+		t.Errorf("unexpected response: %v", ip)
+	}
+}
+
+func TestSimpleDNSClientError(t *testing.T) {
+	exch := exchange
+	level := log.GetLevel()
+	defer func() {
+		exchange = exch
+		log.SetLevel(level)
+	}()
+
+	log.SetLevel(log.FatalLevel)
+	exchange = func(m *dns.Msg, a string) (*dns.Msg, error) {
+		return nil, errors.New("whoopsie daisy")
+	}
+
+	client, err := NewSimpleDNSClient(Endpoints{
+		Endpoint{net.ParseIP("8.8.8.8"), 53},
+	})
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	_, err = client.LookupIP("who.wut")
+	if err == nil {
+		t.Fatal("expected error, got none")
+	}
+
+	if err.Error() != "whoopsie daisy" {
+		t.Error("got unexpected error message")
 	}
 }
