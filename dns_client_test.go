@@ -4,6 +4,8 @@ import (
 	"net"
 	"testing"
 	"time"
+
+	"github.com/miekg/dns"
 )
 
 func TestParseEndpoint(t *testing.T) {
@@ -45,6 +47,11 @@ func TestParseEndpointErrors(t *testing.T) {
 	_, err = ParseEndpoint("abc:53", 53)
 	if err != ErrFailedParsingIP {
 		t.Fatal("expected ErrFailedParsingIP")
+	}
+
+	_, err = ParseEndpoint("8.8.8.8:abc", 53)
+	if err != ErrFailedParsingPort {
+		t.Fatal("expected ErrFailedParsingPort")
 	}
 }
 
@@ -97,5 +104,53 @@ func TestDNSCache(t *testing.T) {
 	r, ok = d.Get("nope")
 	if ok {
 		t.Error("expected to retrieve no record, but got one")
+	}
+}
+
+func TestSimpleDNSClient(t *testing.T) {
+	exch := exchange
+	defer func() { exchange = exch }()
+
+	var callCount int
+	exchange = func(m *dns.Msg, a string) (*dns.Msg, error) {
+		callCount++
+
+		if len(m.Question) != 1 {
+			t.Fatal("expected only one question")
+		}
+
+		if q := m.Question[0].String(); q != ";google.com.	IN	 A" {
+			t.Errorf("unexpected question: %v", q)
+		}
+
+		r := dns.Msg{
+			Answer: []dns.RR{
+				&dns.A{A: net.ParseIP("1.2.3.4")},
+			},
+		}
+		r.SetReply(m)
+
+		return &r, nil
+	}
+
+	client, err := NewSimpleDNSClient(Endpoints{
+		Endpoint{net.ParseIP("8.8.8.8"), 53},
+		Endpoint{net.ParseIP("8.8.4.4"), 53},
+	})
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	ips, err := client.LookupIP("google.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(ips) != 1 {
+		t.Fatal("expected only one answer")
+	}
+
+	if ip := ips[0].String(); ip != "1.2.3.4" {
+		t.Errorf("unexpected response: %v", ip)
 	}
 }

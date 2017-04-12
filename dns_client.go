@@ -14,10 +14,20 @@ import (
 	"github.com/miekg/dns"
 )
 
-var (
-	ErrInvalidEndpointString = errors.New("invalid endpoint string")
-	ErrFailedParsingIP       = errors.New("unable to parse IP from string")
-)
+// ErrInvalidEndpointString is returned when an endpoint string is in an
+// unexpected format; the string is expected to be in `ip[:port]` format
+var ErrInvalidEndpointString = errors.New("invalid endpoint string")
+
+// ErrFailedParsingIP is returned when the endpoint string looked valid, but
+// the IP portion of the string was unable to be parsed
+var ErrFailedParsingIP = errors.New("unable to parse IP from string")
+
+// ErrFailedParsingPort is returned when the endpoint string looked valid, but
+// the port portion of the string was unable to be parsed
+var ErrFailedParsingPort = errors.New("unable to parse port from string")
+
+// exchange is locally set to allow its mocking during testing
+var exchange = dns.Exchange
 
 // ParseEndpoint parses a string into an Endpoint object, where the endpoint
 // string is in the format of "ip:port". If a port is not present in the string,
@@ -40,7 +50,7 @@ func ParseEndpoint(endpoint string, defaultPort uint16) (ep Endpoint, err error)
 	if len(e) > 1 {
 		i, err := strconv.ParseUint(e[1], 10, 16)
 		if err != nil {
-			return ep, err
+			return ep, ErrFailedParsingPort
 		}
 
 		ep.Port = uint16(i)
@@ -131,7 +141,7 @@ func (c *SimpleDNSClient) LookupIP(host string) ([]net.IP, error) {
 	// see if cache has the entry; if it's still good, return it
 	entry, ok := c.cache.Get(host)
 	if ok && entry.expires.After(time.Now()) {
-		log.Debugf("simple dns cache hit for %v\n", host)
+		log.Debugf("simple dns cache hit for %v", host)
 		return entry.ips, nil
 	}
 
@@ -140,8 +150,8 @@ func (c *SimpleDNSClient) LookupIP(host string) ([]net.IP, error) {
 	msg := dns.Msg{}
 	msg.SetQuestion(dns.Fqdn(host), dns.TypeA)
 
-	log.Infof("simple dns lookup %v\n", host)
-	r, err := dns.Exchange(&msg, server.String())
+	log.Infof("simple dns lookup %v", host)
+	r, err := exchange(&msg, server.String())
 	if err != nil {
 		return []net.IP{}, err
 	}
