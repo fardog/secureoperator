@@ -3,10 +3,12 @@ package main
 import (
 	"flag"
 	"fmt"
+	"math/rand"
 	"os"
 	"os/signal"
 	"path/filepath"
 	"syscall"
+	"time"
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/miekg/dns"
@@ -88,6 +90,10 @@ func main() {
 		flag.PrintDefaults()
 	}
 	flag.Parse()
+
+	// seed the global random number generator, used in some utilities and the
+	// google provider
+	rand.Seed(time.Now().UTC().UnixNano())
 
 	// set the loglevel
 	level, err := log.ParseLevel(*logLevel)
