@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"time"
 )
 
 const (
@@ -127,6 +128,23 @@ func NewGDNSProvider(endpoint string, opts *GDNSOptions) (*GDNSProvider, error) 
 		g.dns = d
 	}
 
+	// custom transport for supporting servernames which may not match the url,
+	// in cases where we request directly against an IP
+	tr := &http.Transport{
+		Proxy: http.ProxyFromEnvironment,
+		DialContext: (&net.Dialer{
+			Timeout:   30 * time.Second,
+			KeepAlive: 30 * time.Second,
+			DualStack: true,
+		}).DialContext,
+		MaxIdleConns:          100,
+		IdleConnTimeout:       90 * time.Second,
+		TLSHandshakeTimeout:   10 * time.Second,
+		ExpectContinueTimeout: 1 * time.Second,
+		TLSClientConfig:       &tls.Config{ServerName: g.url.Host},
+	}
+	g.client = &http.Client{Transport: tr}
+
 	return g, nil
 }
 
@@ -138,6 +156,7 @@ type GDNSProvider struct {
 	host     string
 	opts     *GDNSOptions
 	dns      *SimpleDNSClient
+	client   *http.Client
 }
 
 func (g GDNSProvider) newRequest(q DNSQuestion) (*http.Request, error) {
@@ -206,14 +225,7 @@ func (g GDNSProvider) Query(q DNSQuestion) (*DNSResponse, error) {
 		return nil, err
 	}
 
-	// custom transport for supporting servernames which may not match the url,
-	// in cases where we request directly against an IP
-	tr := &http.Transport{
-		TLSClientConfig: &tls.Config{ServerName: g.url.Host},
-	}
-	client := &http.Client{Transport: tr}
-
-	httpresp, err := client.Do(httpreq)
+	httpresp, err := g.client.Do(httpreq)
 	if err != nil {
 		return nil, err
 	}
