@@ -25,7 +25,7 @@ func (h *Handler) Handle(w dns.ResponseWriter, r *dns.Msg) {
 		Name: r.Question[0].Name,
 		Type: r.Question[0].Qtype,
 	}
-	log.Infoln("requesting", q.Name, q.Type)
+	log.Infoln("requesting", q.Name, dns.TypeToString[q.Type])
 
 	dnsResp, err := h.provider.Query(q)
 	if err != nil {
