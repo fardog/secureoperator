@@ -74,7 +74,6 @@ Information on the usage of these options is available with
   
 ## Caveats/TODO
 
-* Currently only the following records are supported: `A, AAAA, CNAME, MX`
 * More thorough tests should be written
 * No caching is implemented, and probably never will. If you need caching, put
   your `secure-operator` server behind another DNS server which provides
