@@ -24,13 +24,11 @@ func TestDNSRRTypeA(t *testing.T) {
 		t.Error("did not get expected record type")
 	}
 
-	h := rr.Header()
-
-	if h.Name != r.Name {
-		t.Errorf("unexpected name %v", h.Name)
+	if v.Header().Name != (r.Name + ".") {
+		t.Errorf("unexpected name %v", v.Header().Name)
 	}
-	if h.Ttl != r.TTL {
-		t.Errorf("unexpected TTL %v", h.Ttl)
+	if v.Header().Ttl != r.TTL {
+		t.Errorf("unexpected TTL %v", v.Header().Ttl)
 	}
 	if v.A.String() != r.Data {
 		t.Errorf("unexpected record data %v", v.A.String())
@@ -55,18 +53,16 @@ func TestDNSRRTypeMX(t *testing.T) {
 		t.Error("did not get expected record type")
 	}
 
-	h := rr.Header()
-
-	if h.Name != r.Name {
-		t.Errorf("unexpected name %v", h.Name)
+	if v.Header().Name != (r.Name + ".") {
+		t.Errorf("unexpected name %v", v.Header().Name)
 	}
-	if h.Ttl != r.TTL {
-		t.Errorf("unexpected TTL %v", h.Ttl)
+	if v.Header().Ttl != r.TTL {
+		t.Errorf("unexpected TTL %v", v.Header().Ttl)
 	}
 	if v.Preference != uint16(10) {
 		t.Errorf("unexpected preference data %v", v.Preference)
 	}
-	if v.Mx != "mail.who.wut.co.jp" {
+	if v.Mx != ("mail.who.wut.co.jp" + ".") {
 		t.Errorf("unexpected mx data %v", v.Preference)
 	}
 }
@@ -89,15 +85,13 @@ func TestDNSRRTypeCNAME(t *testing.T) {
 		t.Error("did not get expected record type")
 	}
 
-	h := rr.Header()
-
-	if h.Name != r.Name {
-		t.Errorf("unexpected name %v", h.Name)
+	if v.Header().Name != (r.Name + ".") {
+		t.Errorf("unexpected name %v", v.Header().Name)
 	}
-	if h.Ttl != r.TTL {
-		t.Errorf("unexpected TTL %v", h.Ttl)
+	if v.Header().Ttl != r.TTL {
+		t.Errorf("unexpected TTL %v", v.Header().Ttl)
 	}
-	if v.Target != r.Data {
+	if v.Target != (r.Data + ".") {
 		t.Errorf("unexpected target data %v", v.Target)
 	}
 }
@@ -120,13 +114,11 @@ func TestDNSRRTypeAAAA(t *testing.T) {
 		t.Error("did not get expected record type")
 	}
 
-	h := rr.Header()
-
-	if h.Name != r.Name {
-		t.Errorf("unexpected name %v", h.Name)
+	if v.Header().Name != (r.Name + ".") {
+		t.Errorf("unexpected name %v", v.Header().Name)
 	}
-	if h.Ttl != r.TTL {
-		t.Errorf("unexpected TTL %v", h.Ttl)
+	if v.Header().Ttl != r.TTL {
+		t.Errorf("unexpected TTL %v", v.Header().Ttl)
 	}
 	if v.AAAA.String() != r.Data {
 		t.Errorf("unexpected record data %v", v.AAAA.String())
