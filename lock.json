@@ -1,0 +1,38 @@
+{
+    "memo": "",
+    "projects": [
+        {
+            "name": "github.com/Sirupsen/logrus",
+            "branch": "master",
+            "revision": "95cd2b9c79aa5e72ab0bc69b7ccc2be15bf850f6",
+            "packages": [
+                "."
+            ]
+        },
+        {
+            "name": "github.com/miekg/dns",
+            "branch": "master",
+            "revision": "7994cb36eaf858ccb42fe26da404c345eca1d62d",
+            "packages": [
+                "."
+            ]
+        },
+        {
+            "name": "golang.org/x/crypto",
+            "branch": "master",
+            "revision": "9f005a07e0d31d45e6656d241bb5c0f2efd4bc94",
+            "packages": [
+                "ssh/terminal"
+            ]
+        },
+        {
+            "name": "golang.org/x/sys",
+            "branch": "master",
+            "revision": "0dd5e194bbf5eb84a39666eb4c98a4d007e4203a",
+            "packages": [
+                "unix",
+                "windows"
+            ]
+        }
+    ]
+}

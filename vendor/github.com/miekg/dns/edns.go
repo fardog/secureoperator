@@ -21,6 +21,7 @@ const (
 	EDNS0EXPIRE       = 0x9     // EDNS0 expire
 	EDNS0COOKIE       = 0xa     // EDNS0 Cookie
 	EDNS0TCPKEEPALIVE = 0xb     // EDNS0 tcp keep alive (RFC7828)
+	EDNS0PADDING      = 0xc     // EDNS0 padding (RFC7830)
 	EDNS0SUBNETDRAFT  = 0x50fa  // Don't use! Use EDNS0SUBNET
 	EDNS0LOCALSTART   = 0xFDE9  // Beginning of range reserved for local/experimental use (RFC6891)
 	EDNS0LOCALEND     = 0xFFFE  // End of range reserved for local/experimental use (RFC6891)
@@ -74,6 +75,8 @@ func (rr *OPT) String() string {
 			s += "\n; NSEC3 HASH UNDERSTOOD: " + o.String()
 		case *EDNS0_LOCAL:
 			s += "\n; LOCAL OPT: " + o.String()
+		case *EDNS0_PADDING:
+			s += "\n; PADDING: " + o.String()
 		}
 	}
 	return s
@@ -103,15 +106,12 @@ func (rr *OPT) SetVersion(v uint8) {
 
 // ExtendedRcode returns the EDNS extended RCODE field (the upper 8 bits of the TTL).
 func (rr *OPT) ExtendedRcode() int {
-	return int((rr.Hdr.Ttl&0xFF000000)>>24) + 15
+	return int((rr.Hdr.Ttl & 0xFF000000) >> 24)
 }
 
 // SetExtendedRcode sets the EDNS extended RCODE field.
 func (rr *OPT) SetExtendedRcode(v uint8) {
-	if v < RcodeBadVers { // Smaller than 16.. Use the 4 bits you have!
-		return
-	}
-	rr.Hdr.Ttl = rr.Hdr.Ttl&0x00FFFFFF | (uint32(v-15) << 24)
+	rr.Hdr.Ttl = rr.Hdr.Ttl&0x00FFFFFF | (uint32(v) << 24)
 }
 
 // UDPSize returns the UDP buffer size.
@@ -157,7 +157,7 @@ type EDNS0 interface {
 	String() string
 }
 
-// The nsid EDNS0 option is used to retrieve a nameserver
+// EDNS0_NSID option is used to retrieve a nameserver
 // identifier. When sending a request Nsid must be set to the empty string
 // The identifier is an opaque string encoded as hex.
 // Basic use pattern for creating an nsid option:
@@ -182,7 +182,8 @@ func (e *EDNS0_NSID) pack() ([]byte, error) {
 	return h, nil
 }
 
-func (e *EDNS0_NSID) Option() uint16        { return EDNS0NSID }
+// Option implements the EDNS0 interface.
+func (e *EDNS0_NSID) Option() uint16        { return EDNS0NSID } // Option returns the option code.
 func (e *EDNS0_NSID) unpack(b []byte) error { e.Nsid = hex.EncodeToString(b); return nil }
 func (e *EDNS0_NSID) String() string        { return string(e.Nsid) }
 
@@ -197,7 +198,7 @@ func (e *EDNS0_NSID) String() string        { return string(e.Nsid) }
 //	e := new(dns.EDNS0_SUBNET)
 //	e.Code = dns.EDNS0SUBNET
 //	e.Family = 1	// 1 for IPv4 source address, 2 for IPv6
-//	e.SourceNetMask = 32	// 32 for IPV4, 128 for IPv6
+//	e.SourceNetmask = 32	// 32 for IPV4, 128 for IPv6
 //	e.SourceScope = 0
 //	e.Address = net.ParseIP("127.0.0.1").To4()	// for IPv4
 //	// e.Address = net.ParseIP("2001:7b8:32a::2")	// for IPV6
@@ -216,6 +217,7 @@ type EDNS0_SUBNET struct {
 	DraftOption   bool // Set to true if using the old (0x50fa) option code
 }
 
+// Option implements the EDNS0 interface.
 func (e *EDNS0_SUBNET) Option() uint16 {
 	if e.DraftOption {
 		return EDNS0SUBNETDRAFT
@@ -229,6 +231,12 @@ func (e *EDNS0_SUBNET) pack() ([]byte, error) {
 	b[2] = e.SourceNetmask
 	b[3] = e.SourceScope
 	switch e.Family {
+	case 0:
+		// "dig" sets AddressFamily to 0 if SourceNetmask is also 0
+		// We might don't need to complain either
+		if e.SourceNetmask != 0 {
+			return nil, errors.New("dns: bad address family")
+		}
 	case 1:
 		if e.SourceNetmask > net.IPv4len*8 {
 			return nil, errors.New("dns: bad netmask")
@@ -263,6 +271,13 @@ func (e *EDNS0_SUBNET) unpack(b []byte) error {
 	e.SourceNetmask = b[2]
 	e.SourceScope = b[3]
 	switch e.Family {
+	case 0:
+		// "dig" sets AddressFamily to 0 if SourceNetmask is also 0
+		// It's okay to accept such a packet
+		if e.SourceNetmask != 0 {
+			return errors.New("dns: bad address family")
+		}
+		e.Address = net.IPv4(0, 0, 0, 0)
 	case 1:
 		if e.SourceNetmask > net.IPv4len*8 || e.SourceScope > net.IPv4len*8 {
 			return errors.New("dns: bad netmask")
@@ -301,7 +316,7 @@ func (e *EDNS0_SUBNET) String() (s string) {
 	return
 }
 
-// The Cookie EDNS0 option
+// The EDNS0_COOKIE option is used to add a DNS Cookie to a message.
 //
 //	o := new(dns.OPT)
 //	o.Hdr.Name = "."
@@ -332,6 +347,7 @@ func (e *EDNS0_COOKIE) pack() ([]byte, error) {
 	return h, nil
 }
 
+// Option implements the EDNS0 interface.
 func (e *EDNS0_COOKIE) Option() uint16        { return EDNS0COOKIE }
 func (e *EDNS0_COOKIE) unpack(b []byte) error { e.Cookie = hex.EncodeToString(b); return nil }
 func (e *EDNS0_COOKIE) String() string        { return e.Cookie }
@@ -353,6 +369,7 @@ type EDNS0_UL struct {
 	Lease uint32
 }
 
+// Option implements the EDNS0 interface.
 func (e *EDNS0_UL) Option() uint16 { return EDNS0UL }
 func (e *EDNS0_UL) String() string { return strconv.FormatUint(uint64(e.Lease), 10) }
 
@@ -382,6 +399,7 @@ type EDNS0_LLQ struct {
 	LeaseLife uint32
 }
 
+// Option implements the EDNS0 interface.
 func (e *EDNS0_LLQ) Option() uint16 { return EDNS0LLQ }
 
 func (e *EDNS0_LLQ) pack() ([]byte, error) {
@@ -418,6 +436,7 @@ type EDNS0_DAU struct {
 	AlgCode []uint8
 }
 
+// Option implements the EDNS0 interface.
 func (e *EDNS0_DAU) Option() uint16        { return EDNS0DAU }
 func (e *EDNS0_DAU) pack() ([]byte, error) { return e.AlgCode, nil }
 func (e *EDNS0_DAU) unpack(b []byte) error { e.AlgCode = b; return nil }
@@ -439,6 +458,7 @@ type EDNS0_DHU struct {
 	AlgCode []uint8
 }
 
+// Option implements the EDNS0 interface.
 func (e *EDNS0_DHU) Option() uint16        { return EDNS0DHU }
 func (e *EDNS0_DHU) pack() ([]byte, error) { return e.AlgCode, nil }
 func (e *EDNS0_DHU) unpack(b []byte) error { e.AlgCode = b; return nil }
@@ -460,6 +480,7 @@ type EDNS0_N3U struct {
 	AlgCode []uint8
 }
 
+// Option implements the EDNS0 interface.
 func (e *EDNS0_N3U) Option() uint16        { return EDNS0N3U }
 func (e *EDNS0_N3U) pack() ([]byte, error) { return e.AlgCode, nil }
 func (e *EDNS0_N3U) unpack(b []byte) error { e.AlgCode = b; return nil }
@@ -482,6 +503,7 @@ type EDNS0_EXPIRE struct {
 	Expire uint32
 }
 
+// Option implements the EDNS0 interface.
 func (e *EDNS0_EXPIRE) Option() uint16 { return EDNS0EXPIRE }
 func (e *EDNS0_EXPIRE) String() string { return strconv.FormatUint(uint64(e.Expire), 10) }
 
@@ -520,6 +542,7 @@ type EDNS0_LOCAL struct {
 	Data []byte
 }
 
+// Option implements the EDNS0 interface.
 func (e *EDNS0_LOCAL) Option() uint16 { return e.Code }
 func (e *EDNS0_LOCAL) String() string {
 	return strconv.FormatInt(int64(e.Code), 10) + ":0x" + hex.EncodeToString(e.Data)
@@ -543,15 +566,16 @@ func (e *EDNS0_LOCAL) unpack(b []byte) error {
 	return nil
 }
 
+// EDNS0_TCP_KEEPALIVE is an EDNS0 option that instructs the server to keep
+// the TCP connection alive. See RFC 7828.
 type EDNS0_TCP_KEEPALIVE struct {
 	Code    uint16 // Always EDNSTCPKEEPALIVE
 	Length  uint16 // the value 0 if the TIMEOUT is omitted, the value 2 if it is present;
 	Timeout uint16 // an idle timeout value for the TCP connection, specified in units of 100 milliseconds, encoded in network byte order.
 }
 
-func (e *EDNS0_TCP_KEEPALIVE) Option() uint16 {
-	return EDNS0TCPKEEPALIVE
-}
+// Option implements the EDNS0 interface.
+func (e *EDNS0_TCP_KEEPALIVE) Option() uint16 { return EDNS0TCPKEEPALIVE }
 
 func (e *EDNS0_TCP_KEEPALIVE) pack() ([]byte, error) {
 	if e.Timeout != 0 && e.Length != 2 {
@@ -595,3 +619,16 @@ func (e *EDNS0_TCP_KEEPALIVE) String() (s string) {
 	}
 	return
 }
+
+// EDNS0_PADDING option is used to add padding to a request/response. The default
+// value of padding SHOULD be 0x0 but other values MAY be used, for instance if
+// compression is applied before encryption which may break signatures.
+type EDNS0_PADDING struct {
+	Padding []byte
+}
+
+// Option implements the EDNS0 interface.
+func (e *EDNS0_PADDING) Option() uint16        { return EDNS0PADDING }
+func (e *EDNS0_PADDING) pack() ([]byte, error) { return e.Padding, nil }
+func (e *EDNS0_PADDING) unpack(b []byte) error { e.Padding = b; return nil }
+func (e *EDNS0_PADDING) String() string        { return fmt.Sprintf("%0X", e.Padding) }
