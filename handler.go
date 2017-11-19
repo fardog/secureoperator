@@ -44,22 +44,9 @@ func (h *Handler) Handle(w dns.ResponseWriter, r *dns.Msg) {
 	}
 
 	// Parse google RRs to DNS RRs
-	answers := []dns.RR{}
-	for _, a := range dnsResp.Answer {
-		answers = append(answers, a.RR())
-	}
-
-	// Parse google RRs to DNS RRs
-	authorities := []dns.RR{}
-	for _, ns := range dnsResp.Authority {
-		authorities = append(authorities, ns.RR())
-	}
-
-	// Parse google RRs to DNS RRs
-	extras := []dns.RR{}
-	for _, extra := range dnsResp.Extra {
-		authorities = append(authorities, extra.RR())
-	}
+	answers := transformRR(dnsResp.Answer, "answer")
+	authorities := transformRR(dnsResp.Authority, "authority")
+	extras := transformRR(dnsResp.Extra, "extra")
 
 	resp := dns.Msg{
 		MsgHdr: dns.MsgHdr{
@@ -86,4 +73,19 @@ func (h *Handler) Handle(w dns.ResponseWriter, r *dns.Msg) {
 	if err != nil {
 		log.Errorln("Error writing DNS response:", err)
 	}
+}
+
+// for a given []DNSRR, transform to dns.RR, logging if any errors occur
+func transformRR(rrs []DNSRR, logType string) []dns.RR {
+	var t []dns.RR
+
+	for _, r := range rrs {
+		if rr, err := r.DNSRR(); err != nil {
+			log.Errorln("unable to translate record rr", logType, r, err)
+		} else {
+			t = append(t, rr)
+		}
+	}
+
+	return t
 }
