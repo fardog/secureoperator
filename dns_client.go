@@ -135,8 +135,8 @@ type SimpleDNSClient struct {
 	cache   *dnsCache
 }
 
-// LookupIP looks up a single IP against the client's configured DNS servers,
-// returning a value from cache if its still valid.
+// LookupIP does a single lookup against the client's configured DNS servers,
+// returning a value from cache if its still valid. It looks at A records only.
 func (c *SimpleDNSClient) LookupIP(host string) ([]net.IP, error) {
 	// see if cache has the entry; if it's still good, return it
 	entry, ok := c.cache.Get(host)
@@ -165,12 +165,14 @@ func (c *SimpleDNSClient) LookupIP(host string) ([]net.IP, error) {
 	for _, ans := range r.Answer {
 		h := ans.Header()
 
-		if shortestTTL == 0 || h.Ttl < shortestTTL {
-			shortestTTL = h.Ttl
-		}
-
 		if t, ok := ans.(*dns.A); ok {
 			rec.ips = append(rec.ips, t.A)
+
+			// if the TTL of this record is the shortest or first seen, use it
+			// as the cache record TTL
+			if shortestTTL == 0 || h.Ttl < shortestTTL {
+				shortestTTL = h.Ttl
+			}
 		}
 	}
 
