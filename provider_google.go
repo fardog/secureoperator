@@ -74,12 +74,12 @@ func (rs GDNSRRs) DNSRRs() (rrs []DNSRR) {
 
 // GDNSResponse represents a response from the Google DNS-over-HTTPS servers
 type GDNSResponse struct {
-	Status           int32         `json:"Status,omitempty"`
-	TC               bool          `json:"TC,omitempty"`
-	RD               bool          `json:"RD,omitempty"`
-	RA               bool          `json:"RA,omitempty"`
-	AD               bool          `json:"AD,omitempty"`
-	CD               bool          `json:"CD,omitempty"`
+	Status           int32         `json:"Status"`
+	TC               bool          `json:"TC"`
+	RD               bool          `json:"RD"`
+	RA               bool          `json:"RA"`
+	AD               bool          `json:"AD"`
+	CD               bool          `json:"CD"`
 	Question         GDNSQuestions `json:"Question,omitempty"`
 	Answer           GDNSRRs       `json:"Answer,omitempty"`
 	Authority        GDNSRRs       `json:"Authority,omitempty"`
