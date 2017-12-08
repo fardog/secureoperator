@@ -18,20 +18,16 @@ type DNSRR struct {
 	Data string `json:"data,omitempty"`
 }
 
-// RR is deprecated as of 2.2.0, use DNSRR instead
-func (r DNSRR) RR() dns.RR {
-	hdr := dns.RR_Header{Name: r.Name, Rrtype: r.Type, Class: dns.ClassINET, Ttl: r.TTL}
-	str := hdr.String() + r.Data
-	rr, _ := dns.NewRR(str)
-	return rr
-}
-
-// DNSRR transforms a DNSRR to a dns.RR; returns `nil` if an RR could not be
-// created from the record.
-func (r DNSRR) DNSRR() (dns.RR, error) {
+// RR transforms a DNSRR to a dns.RR
+func (r DNSRR) RR() (dns.RR, error) {
 	hdr := dns.RR_Header{Name: r.Name, Rrtype: r.Type, Class: dns.ClassINET, Ttl: r.TTL}
 	str := hdr.String() + r.Data
 	return dns.NewRR(str)
+}
+
+// DNSRR is deprecated as of 3.0.0; use RR instead.
+func (r DNSRR) DNSRR() (dns.RR, error) {
+	return r.RR()
 }
 
 func (r DNSRR) String() string {
