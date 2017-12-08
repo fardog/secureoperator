@@ -99,6 +99,10 @@ type GDNSOptions struct {
 	// DNSServers is a list of Endpoints to be used as DNS servers when looking
 	// up the endpoint; if not provided, the system DNS resolver is used.
 	DNSServers Endpoints
+	// The EDNS subnet to send in the edns0-client-subnet option. If not
+	// specified, Google determines this automatically. To specify that the
+	// option should not be set, use the value "0.0.0.0/0".
+	EDNSSubnet string
 }
 
 // NewGDNSProvider creates a GDNSProvider
@@ -197,7 +201,10 @@ func (g GDNSProvider) newRequest(q DNSQuestion) (*http.Request, error) {
 
 	qry.Add("name", q.Name)
 	qry.Add("type", dnsType)
-	qry.Add("edns_client_subnet", "0.0.0.0/0")
+
+	if g.opts.EDNSSubnet != "" {
+		qry.Add("edns_client_subnet", g.opts.EDNSSubnet)
+	}
 
 	httpreq.URL.RawQuery = qry.Encode()
 

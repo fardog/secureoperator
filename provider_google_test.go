@@ -24,6 +24,10 @@ func TestQuery(t *testing.T) {
 			t.Errorf("unexpected type in query: %v", tp)
 		}
 
+		if strings.Contains(r.URL.RawQuery, "edns_client_subnet") {
+			t.Errorf("should not set edns_client_subnet if not specified")
+		}
+
 		w.WriteHeader(http.StatusOK)
 		w.Header().Set("Content-Type", "application/json")
 		fmt.Fprint(w, gresp)
@@ -59,6 +63,42 @@ func TestQuery(t *testing.T) {
 
 	if resp.ResponseCode != 0 {
 		t.Errorf("unexpected response code %v", resp.ResponseCode)
+	}
+}
+
+func TestEDNS(t *testing.T) {
+	name := "example.com"
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		if n := q.Get("name"); n != name {
+			t.Errorf("unexpected name in query: %v", n)
+		}
+		if tp := q.Get("type"); tp != strconv.Itoa(int(dns.TypeA)) {
+			t.Errorf("unexpected type in query: %v", tp)
+		}
+		if e := q.Get("edns_client_subnet"); e != "0.0.0.0/0" {
+			t.Errorf("did not use edns_client_subnet option specified")
+		}
+
+		w.WriteHeader(http.StatusOK)
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, gresp)
+	}))
+	defer ts.Close()
+
+	g, err := NewGDNSProvider(ts.URL, &GDNSOptions{
+		EDNSSubnet: "0.0.0.0/0",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = g.Query(DNSQuestion{
+		Name: name,
+		Type: dns.TypeA,
+	})
+	if err != nil {
+		t.Error(err)
 	}
 }
 
