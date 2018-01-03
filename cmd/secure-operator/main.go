@@ -142,10 +142,11 @@ func main() {
 	}
 
 	provider, err := secop.NewGDNSProvider(*endpoint, &secop.GDNSOptions{
-		Pad:         !*noPad,
-		EndpointIPs: eips,
-		DNSServers:  dips,
-		EDNSSubnet:  edns,
+		Pad:                 !*noPad,
+		EndpointIPs:         eips,
+		DNSServers:          dips,
+		UseEDNSsubnetOption: true,
+		EDNSSubnet:          edns,
 	})
 	if err != nil {
 		log.Fatal(err)
