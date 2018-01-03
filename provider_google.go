@@ -102,13 +102,13 @@ type GDNSOptions struct {
 	// DNSServers is a list of Endpoints to be used as DNS servers when looking
 	// up the endpoint; if not provided, the system DNS resolver is used.
 	DNSServers Endpoints
-	// UseEDNSSubnetOption is a temporary option which must be specified to
-	// enable an EDNS value other than the default of "0.0.0.0/0", which is
-	// Google's sentinel value for "do not send EDNS with this request".
+	// UseEDNSSubnetOption is an option which must be specified to enable an
+	// EDNS value other than the default of "0.0.0.0/0", which is Google's
+	// sentinel value for "do not send EDNS with this request".
 	//
 	// When this option is false, the value in EDNSSubnet is ignored.
 	//
-	// This temporary option exists becase the API change may have been
+	// This temporary option exists because the API change may have been
 	// dangerous to consumers of this library: to send EDNS by default.
 	//
 	// Deprecated: this option will be removed in v4, and the default behavior
