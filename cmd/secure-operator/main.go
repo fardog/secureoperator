@@ -69,7 +69,7 @@ var (
 	)
 	ednsSubnet = flag.String(
 		"edns-subnet",
-		"0.0.0.0/0",
+		secop.GoogleEDNSSentinelValue,
 		`Specify a subnet to be sent in the edns0-client-subnet option; by default
         we specify that this option should not be used, for privacy. If
         -auto-edns-subnet is used, the value specified here is ignored.
@@ -137,7 +137,7 @@ func main() {
 	if _, _, err := net.ParseCIDR(edns); edns != "" && err != nil {
 		log.Fatal(err)
 	}
-	if edns != "0.0.0.0/0" {
+	if edns != secop.GoogleEDNSSentinelValue {
 		log.Warn("EDNS will be used; authoritative name servers may be able to determine your location")
 	}
 
