@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"math/rand"
+	"net"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -55,6 +56,24 @@ var (
 		`DNS Servers used to look up the endpoint; system default is used if absent.
         Ignored if "endpoint-ips" is set. Comma separated, e.g. "8.8.8.8,8.8.4.4:53".
         The port section is optional, and 53 will be used by default.`,
+	)
+	autoEDNS = flag.Bool(
+		"auto-edns-subnet",
+		false,
+		`By default, we use an EDNS subnet of 0.0.0.0/0 which does not reveal your
+        IP address or subnet to authoratative DNS servers. If privacy of your IP
+        address is not a concern and you want to take advantage of an authoratative
+        server determining the best DNS results for you, set this flag. This flag
+        specifies that Google should choose what subnet to send; if you'd like to
+        specify your own subnet, use the -edns-subnet option.`,
+	)
+	ednsSubnet = flag.String(
+		"edns-subnet",
+		secop.GoogleEDNSSentinelValue,
+		`Specify a subnet to be sent in the edns0-client-subnet option; by default
+        we specify that this option should not be used, for privacy. If
+        -auto-edns-subnet is used, the value specified here is ignored.
+       `,
 	)
 
 	enableTCP = flag.Bool("tcp", true, "Listen on TCP")
@@ -111,10 +130,23 @@ func main() {
 		log.Fatalf("error parsing dns-servers: %v", err)
 	}
 
+	edns := *ednsSubnet
+	if *autoEDNS {
+		edns = ""
+	}
+	if _, _, err := net.ParseCIDR(edns); edns != "" && err != nil {
+		log.Fatal(err)
+	}
+	if edns != secop.GoogleEDNSSentinelValue {
+		log.Warn("EDNS will be used; authoritative name servers may be able to determine your location")
+	}
+
 	provider, err := secop.NewGDNSProvider(*endpoint, &secop.GDNSOptions{
-		Pad:         !*noPad,
-		EndpointIPs: eips,
-		DNSServers:  dips,
+		Pad:                 !*noPad,
+		EndpointIPs:         eips,
+		DNSServers:          dips,
+		UseEDNSsubnetOption: true,
+		EDNSSubnet:          edns,
 	})
 	if err != nil {
 		log.Fatal(err)

@@ -14,6 +14,9 @@ import (
 const (
 	// DNSNameMaxBytes is the maximum number of bytes a DNS name may contain
 	DNSNameMaxBytes = 253
+	// GoogleEDNSSentinelValue is the value that when sent to Google as the
+	// EDNS value, means "do not use EDNS".
+	GoogleEDNSSentinelValue = "0.0.0.0/0"
 	// max number of characters in a 16-bit uint integer, converted to string
 	extraPad         = 5
 	paddingParameter = "random_padding"
@@ -99,6 +102,22 @@ type GDNSOptions struct {
 	// DNSServers is a list of Endpoints to be used as DNS servers when looking
 	// up the endpoint; if not provided, the system DNS resolver is used.
 	DNSServers Endpoints
+	// UseEDNSSubnetOption is an option which must be specified to enable an
+	// EDNS value other than the default of "0.0.0.0/0", which is Google's
+	// sentinel value for "do not send EDNS with this request".
+	//
+	// When this option is false, the value in EDNSSubnet is ignored.
+	//
+	// This temporary option exists because the API change may have been
+	// dangerous to consumers of this library: to send EDNS by default.
+	//
+	// Deprecated: this option will be removed in v4, and the default behavior
+	// will be that Google decides EDNS behavior.
+	UseEDNSsubnetOption bool
+	// The EDNS subnet to send in the edns0-client-subnet option. If not
+	// specified, Google determines this automatically. To specify that the
+	// option should not be set, use the value "0.0.0.0/0".
+	EDNSSubnet string
 }
 
 // NewGDNSProvider creates a GDNSProvider
@@ -197,7 +216,14 @@ func (g GDNSProvider) newRequest(q DNSQuestion) (*http.Request, error) {
 
 	qry.Add("name", q.Name)
 	qry.Add("type", dnsType)
-	qry.Add("edns_client_subnet", "0.0.0.0/0")
+
+	edns := GoogleEDNSSentinelValue
+	if g.opts.UseEDNSsubnetOption {
+		edns = g.opts.EDNSSubnet
+	}
+	if edns != "" {
+		qry.Add("edns_client_subnet", edns)
+	}
 
 	httpreq.URL.RawQuery = qry.Encode()
 
