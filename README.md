@@ -40,7 +40,7 @@ The `latest` tag will always be the build from the `master` branch. If you wish
 to use one of the stable releases, use its version tag when pulling, e.g.:
 
 ```
-docker pull fardog/secureoperator:v2.0.0
+docker pull fardog/secureoperator:v3.0.0
 ```
 
 ## Version Compatibility
@@ -50,7 +50,7 @@ always considered stable, but may break API compatibility. If you require API
 stability, either use the tagged releases or mirror on gopkg.in:
 
 ```
-go get -u gopkg.in/fardog/secureoperator.v2
+go get -u gopkg.in/fardog/secureoperator.v3
 ```
 
 ## Security
@@ -91,7 +91,7 @@ This owes heavily to the following work:
 ## License
 
 ```
-   Copyright 2017 Nathan Wittstock
+   Copyright 2018 Nathan Wittstock
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
