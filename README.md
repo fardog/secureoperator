@@ -91,6 +91,9 @@ following areas could use work:
 * More thorough unit tests
 * Installable packages for your favorite Linux distributions
 * Documentation on deploying secureoperator to a local network
+* Contributions to [reverseoperator][], the work-in-progress sibling project to
+  secureoperator which enables API compatible independent DNS-over-HTTPS servers
+  to be run
 
 ## Acknowledgments
 
@@ -120,3 +123,4 @@ This owes heavily to the following work:
 [semver]: http://semver.org/
 [wiki-setup]: https://github.com/fardog/secureoperator/wiki/Setting-up-dnsmasq-with-secureoperator
 [dnsmasq]: http://www.thekelleys.org.uk/dnsmasq/doc.html
+[reverseoperator]: https://github.com/fardog/reverseoperator
