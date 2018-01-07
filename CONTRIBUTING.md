@@ -96,9 +96,9 @@ By making a contribution to this project, I certify that:
   redistributed consistent with this project or the open source license(s)
   involved.
 
-## Acknowledgements
+## Attribution
 
-This document is taken from the following sources:
+This document is adapted from the following sources:
 
 * [CONTRIBUTING.md][]
 * [OPEN Open Source][openopen]
