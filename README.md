@@ -83,9 +83,14 @@ consider the following:
 Information on the usage of these options is available with
 `secure-operator --help`. 
   
-## TODO
+## Help Wanted
 
-* More thorough tests should be written
+secureoperator could be greatly enhanced by community contributions! The
+following areas could use work:
+
+* More thorough unit tests
+* Installable packages for your favorite Linux distributions
+* Documentation on deploying secureoperator to a local network
 
 ## Acknowledgments
 
