@@ -43,6 +43,17 @@ to use one of the stable releases, use its version tag when pulling, e.g.:
 docker pull fardog/secureoperator:v3.0.0
 ```
 
+## Caching
+
+secureoperator _does not perform any caching_; each request to it causes a
+matching request to the upstream DNS-over-HTTPS server to be made. It's
+recommended that you place secureoperator behind a caching DNS server such as
+[dnsmasq][] on your local network.
+
+An simple example setup is [described on the wiki][wiki-setup]. Please feel free
+to contribute additional setups if you are running secureoperator in your
+environment.
+
 ## Version Compatibility
 
 This package follows [semver][] for its tagged releases. The `master` branch is
@@ -72,13 +83,17 @@ consider the following:
 Information on the usage of these options is available with
 `secure-operator --help`. 
   
-## Caveats/TODO
+## Help Wanted
 
-* More thorough tests should be written
-* No caching is implemented, and probably never will. If you need caching, put
-  your `secure-operator` server behind another DNS server which provides
-  caching. (TODO: write instructions on setup, or provide a docker-compose
-  configuration.)
+secureoperator could be greatly enhanced by community contributions! The
+following areas could use work:
+
+* More thorough unit tests
+* Installable packages for your favorite Linux distributions
+* Documentation on deploying secureoperator to a local network
+* Contributions to [reverseoperator][], the work-in-progress sibling project to
+  secureoperator which enables API compatible independent DNS-over-HTTPS servers
+  to be run
 
 ## Acknowledgments
 
@@ -106,3 +121,6 @@ This owes heavily to the following work:
 [docker]: https://www.docker.com/
 [issues]: https://github.com/fardog/secureoperator/issues
 [semver]: http://semver.org/
+[wiki-setup]: https://github.com/fardog/secureoperator/wiki/Setting-up-dnsmasq-with-secureoperator
+[dnsmasq]: http://www.thekelleys.org.uk/dnsmasq/doc.html
+[reverseoperator]: https://github.com/fardog/reverseoperator
