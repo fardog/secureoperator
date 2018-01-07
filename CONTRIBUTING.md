@@ -28,10 +28,10 @@ contributors are expected to adhere to the [code of conduct][].
 
 ## Code and Documentation Style
 
-Go provides a standard tool for formatting: [`gofmt`][]. Any code contributions
-to this repository should be formatted with `gofmt` prior to a Pull Request
-being filed. Additionally, we try to keep lines to under 80 characters where
-possible, to avoid line wrapping in an editor.
+Go provides a standard tool for formatting: [`gofmt`][gofmt]. Any code
+contributions to this repository should be formatted with `gofmt` prior to a
+Pull Request being filed. Additionally, we try to keep lines to under 80
+characters where possible, to avoid line wrapping in an editor.
 
 Documentation should be written in [CommonMark][], a strongly-defined spec for
 Markdown. Lines should be hard-wrapped to 80 characters, with exceptions for
