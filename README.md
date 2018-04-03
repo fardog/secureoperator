@@ -93,16 +93,22 @@ however:
 * Cloudflare returns JSON which is not properly escaped for `TXT` records, and
   will fail decoding by the Go JSON parser. It's not been investigated if their
   invalid JSON is intentional or a bug, but work will be needed.
-* Cloudflare requires a Content-Type parameter to be present in the URL, which
-  must be provided in the CLI
+* Requests require a Content-Type parameter to be present in the URL, which must
+  be provided in the CLI.
+* Not heavily tested, as the Google provider is.
+
+For a production environment, the Google provider (default) is your best option
+today. If you're brave, please test Cloudflare and [report any issues][issues]!
 
 ## Security
 
 Note that while DNS requests are made over HTTPS, this does not imply "secure";
 consider the following:
 
-* You must trust Google with your requests, see
-  [their privacy statement][googlednspriv] for further details.
+* You must trust the upstream provider with your requests; for your chosen
+  provider, see:
+  * [Google's Privacy Policy][googlednspriv]
+  * [Cloudflare's Privacy Policy][cloudflarednspriv]
 * The lookup for the Google DNS endpoint must happen in _some_ regard, although
   how this is handled is up to you:
     * The system DNS resolver is used to look up the endpoint (default)
@@ -149,6 +155,7 @@ This owes heavily to the following work:
 
 [dnsoverhttps]: https://developers.google.com/speed/public-dns/docs/dns-over-https
 [googlednspriv]: https://developers.google.com/speed/public-dns/privacy
+[cloudflarednspriv]: https://developers.cloudflare.com/1.1.1.1/commitment-to-privacy/
 [releases]: https://github.com/fardog/secureoperator/releases
 [docker]: https://www.docker.com/
 [issues]: https://github.com/fardog/secureoperator/issues
