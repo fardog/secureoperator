@@ -9,8 +9,9 @@ across the internet using HTTPS.
 
 It's known to work with the following providers:
 
-* [Google][dnsoverhttps] - Configured by default
-* [Cloudflare][] - Can be enabled with [cli flags](#cloudflare)
+* [Google][dnsoverhttps] - Well tested and configured by default
+* **Alpha:** [Cloudflare][] - See [release notes](#cloudflare) for configuration
+  and caveats
 
 ## Installation
 
@@ -83,6 +84,17 @@ $ secure-operator \
 Support for [Cloudflare][] as a DNS-over-HTTPS will be added as a CLI flag in
 the future, however the above will work with the current version of
 secureoperator.
+
+### Known Issues
+
+Cloudflare is not working perfectly yet; it should work for common tasks,
+however:
+
+* Cloudflare returns JSON which is not properly escaped for `TXT` records, and
+  will fail decoding by the Go JSON parser. It's not been investigated if their
+  invalid JSON is intentional or a bug, but work will be needed.
+* Cloudflare requires a Content-Type parameter to be present in the URL, which
+  must be provided in the CLI
 
 ## Security
 
