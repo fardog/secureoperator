@@ -3,9 +3,14 @@
 [![Build Status](https://travis-ci.org/fardog/secureoperator.svg?branch=master)](https://travis-ci.org/fardog/secureoperator)
 [![](https://godoc.org/github.com/fardog/secureoperator?status.svg)](https://godoc.org/github.com/fardog/secureoperator)
 
-A DNS-protocol proxy for Google's [DNS-over-HTTPS][dnsoverhttps]: allows you to
-run a server on your local network which responds to DNS queries, but requests
-records across the internet using HTTPS.
+A DNS-protocol proxy for [DNS-over-HTTPS][dnsoverhttps]: allows you to run a
+server on your local network which responds to DNS queries, but requests records
+across the internet using HTTPS.
+
+It's known to work with the following providers:
+
+* [Google][dnsoverhttps] - Configured by default
+* [Cloudflare][] - Can be enabled with [cli flags](#cloudflare)
 
 ## Installation
 
@@ -63,6 +68,21 @@ stability, either use the tagged releases or mirror on gopkg.in:
 ```
 go get -u gopkg.in/fardog/secureoperator.v3
 ```
+
+## Cloudflare
+
+[Cloudflare][] can be used as an DNS-over-HTTPS provider today, but requires
+some special configuration. Try the following:
+
+```
+$ secure-operator \
+  -endpoint https://cloudflare-dns.com/dns-query\?ct\=application/dns-json \
+  -endpoint-ips 1.1.1.1,1.0.0.1
+```
+
+Support for [Cloudflare][] as a DNS-over-HTTPS will be added as a CLI flag in
+the future, however the above will work with the current version of
+secureoperator.
 
 ## Security
 
@@ -124,3 +144,4 @@ This owes heavily to the following work:
 [wiki-setup]: https://github.com/fardog/secureoperator/wiki/Setting-up-dnsmasq-with-secureoperator
 [dnsmasq]: http://www.thekelleys.org.uk/dnsmasq/doc.html
 [reverseoperator]: https://github.com/fardog/reverseoperator
+[cloudflare]: https://1.1.1.1/
