@@ -87,15 +87,13 @@ secureoperator.
 
 ### Known Issues
 
-Cloudflare is not working perfectly yet; it should work for common tasks,
-however:
+Cloudflare is not fully tested yet; it should work for common cases, however: 
 
-* Cloudflare returns JSON which is not properly escaped for `TXT` records, and
-  will fail decoding by the Go JSON parser. It's not been investigated if their
-  invalid JSON is intentional or a bug, but work will be needed.
 * Requests require a Content-Type parameter to be present in the URL, which must
   be provided in the CLI.
-* Not heavily tested, as the Google provider is.
+* EDNS is not supported; this is an intentional choice by Cloudflare, which
+  means any EDNS setting you provide when using Cloudflare as a provider will
+  be silently ignored.
 
 For a production environment, the Google provider (default) is your best option
 today. If you're brave, please test Cloudflare and [report any issues][issues]!
@@ -109,8 +107,8 @@ consider the following:
   provider, see:
   * [Google's Privacy Policy][googlednspriv]
   * [Cloudflare's Privacy Policy][cloudflarednspriv]
-* The lookup for the Google DNS endpoint must happen in _some_ regard, although
-  how this is handled is up to you:
+* The lookup for the HTTP endpoint must happen in _some_ regard, although how
+  this is handled is up to you:
     * The system DNS resolver is used to look up the endpoint (default)
     * You provide a list of DNS servers to use for the endpoint lookup
     * You provide the IP address(es) to the endpoint; and no unencrypted DNS
