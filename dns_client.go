@@ -173,10 +173,13 @@ func (c *SimpleDNSClient) LookupIP(host string) ([]net.IP, error) {
 		defer cancel()
 
 		log.Infof("simple dns lookup %v", host)
-		// TODO: handle timeout error, and continue
 		r, err := exchange(ctx, &msg, server.String())
+		if nerr, ok := err.(net.Error); ok && nerr.Timeout() {
+			// was a timeout error; continue to the next server
+			continue
+		}
 		if err != nil {
-			return []net.IP{}, err
+			return nil, err
 		}
 
 		rec := dnsCacheRecord{
@@ -208,5 +211,6 @@ func (c *SimpleDNSClient) LookupIP(host string) ([]net.IP, error) {
 		return rec.ips, nil
 	}
 
+	// we didn't reach any server; return a known error
 	return nil, ErrAllServersFailed
 }
