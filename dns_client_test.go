@@ -231,6 +231,10 @@ func TestSimpleDNSClientTimeoutSingle(t *testing.T) {
 	var callCount int
 	exchange = func(ctx context.Context, m *dns.Msg, a string) (*dns.Msg, error) {
 		callCount++
+		if _, ok := ctx.Deadline(); !ok {
+			t.Errorf("expected deadline")
+		}
+
 		if a == "8.8.8.8:53" {
 			return nil, &net.DNSError{IsTimeout: true}
 		}
