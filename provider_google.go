@@ -139,7 +139,7 @@ func NewGDNSProvider(endpoint string, opts *GDNSOptions) (*GDNSProvider, error) 
 	}
 
 	if len(opts.DNSServers) > 0 {
-		d, err := NewSimpleDNSClient(opts.DNSServers)
+		d, err := NewSimpleDNSClient(opts.DNSServers, nil)
 		if err != nil {
 			return nil, err
 		}

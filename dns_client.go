@@ -1,6 +1,7 @@
 package secureoperator
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"math/rand"
@@ -26,8 +27,14 @@ var ErrFailedParsingIP = errors.New("unable to parse IP from string")
 // the port portion of the string was unable to be parsed
 var ErrFailedParsingPort = errors.New("unable to parse port from string")
 
+// ErrAllServersFailed is returned when we failed to reach all configured DNS
+// servers
+var ErrAllServersFailed = errors.New("unable to reach any of the configured servers")
+
 // exchange is locally set to allow its mocking during testing
-var exchange = dns.Exchange
+var exchange = dns.ExchangeContext
+
+const defaultDNSClientTimeout = 10 * time.Second
 
 // ParseEndpoint parses a string into an Endpoint object, where the endpoint
 // string is in the format of "ip:port". If a port is not present in the string,
@@ -113,15 +120,26 @@ func (d *dnsCache) Set(key string, rec dnsCacheRecord) {
 	d.records[key] = rec
 }
 
+type DNSClientOptions struct {
+	Timeout time.Duration
+}
+
 // NewSimpleDNSClient creates a SimpleDNSClient
-func NewSimpleDNSClient(servers Endpoints) (*SimpleDNSClient, error) {
+func NewSimpleDNSClient(servers Endpoints, opts *DNSClientOptions) (*SimpleDNSClient, error) {
 	if len(servers) < 1 {
 		return nil, fmt.Errorf("at least one endpoint server is required")
+	}
+	if opts == nil {
+		opts = &DNSClientOptions{}
+	}
+	if opts.Timeout == 0 {
+		opts.Timeout = defaultDNSClientTimeout
 	}
 
 	return &SimpleDNSClient{
 		servers: servers,
 		cache:   newDNSCache(),
+		opts:    opts,
 	}, nil
 }
 
@@ -133,6 +151,7 @@ func NewSimpleDNSClient(servers Endpoints) (*SimpleDNSClient, error) {
 type SimpleDNSClient struct {
 	servers Endpoints
 	cache   *dnsCache
+	opts    *DNSClientOptions
 }
 
 // LookupIP does a single lookup against the client's configured DNS servers,
@@ -146,41 +165,48 @@ func (c *SimpleDNSClient) LookupIP(host string) ([]net.IP, error) {
 	}
 
 	// we need to look it up
-	server := c.servers.Random()
-	msg := dns.Msg{}
-	msg.SetQuestion(dns.Fqdn(host), dns.TypeA)
+	for _, server := range c.servers {
+		msg := dns.Msg{}
+		msg.SetQuestion(dns.Fqdn(host), dns.TypeA)
 
-	log.Infof("simple dns lookup %v", host)
-	r, err := exchange(&msg, server.String())
-	if err != nil {
-		return []net.IP{}, err
-	}
+		ctx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
+		defer cancel()
 
-	rec := dnsCacheRecord{
-		msg: r,
-	}
+		log.Infof("simple dns lookup %v", host)
+		// TODO: handle timeout error, and continue
+		r, err := exchange(ctx, &msg, server.String())
+		if err != nil {
+			return []net.IP{}, err
+		}
 
-	var shortestTTL uint32
+		rec := dnsCacheRecord{
+			msg: r,
+		}
 
-	for _, ans := range r.Answer {
-		h := ans.Header()
+		var shortestTTL uint32
 
-		if t, ok := ans.(*dns.A); ok {
-			rec.ips = append(rec.ips, t.A)
+		for _, ans := range r.Answer {
+			h := ans.Header()
 
-			// if the TTL of this record is the shortest or first seen, use it
-			// as the cache record TTL
-			if shortestTTL == 0 || h.Ttl < shortestTTL {
-				shortestTTL = h.Ttl
+			if t, ok := ans.(*dns.A); ok {
+				rec.ips = append(rec.ips, t.A)
+
+				// if the TTL of this record is the shortest or first seen, use it
+				// as the cache record TTL
+				if shortestTTL == 0 || h.Ttl < shortestTTL {
+					shortestTTL = h.Ttl
+				}
 			}
 		}
+
+		// set the expiry
+		rec.expires = time.Now().Add(time.Second * time.Duration(shortestTTL))
+
+		// cache the record
+		c.cache.Set(host, rec)
+
+		return rec.ips, nil
 	}
 
-	// set the expiry
-	rec.expires = time.Now().Add(time.Second * time.Duration(shortestTTL))
-
-	// cache the record
-	c.cache.Set(host, rec)
-
-	return rec.ips, nil
+	return nil, ErrAllServersFailed
 }

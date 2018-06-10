@@ -1,6 +1,7 @@
 package secureoperator
 
 import (
+	"context"
 	"errors"
 	"net"
 	"testing"
@@ -120,7 +121,7 @@ func TestSimpleDNSClient(t *testing.T) {
 	var callCount int
 
 	log.SetLevel(log.FatalLevel)
-	exchange = func(m *dns.Msg, a string) (*dns.Msg, error) {
+	exchange = func(ctx context.Context, m *dns.Msg, a string) (*dns.Msg, error) {
 		callCount++
 
 		if len(m.Question) != 1 {
@@ -147,7 +148,7 @@ func TestSimpleDNSClient(t *testing.T) {
 	// test first call, should hit resolver
 	client, err := NewSimpleDNSClient(Endpoints{
 		Endpoint{net.ParseIP("8.8.8.8"), 53},
-	})
+	}, nil)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -196,13 +197,13 @@ func TestSimpleDNSClientError(t *testing.T) {
 	}()
 
 	log.SetLevel(log.FatalLevel)
-	exchange = func(m *dns.Msg, a string) (*dns.Msg, error) {
+	exchange = func(ctx context.Context, m *dns.Msg, a string) (*dns.Msg, error) {
 		return nil, errors.New("whoopsie daisy")
 	}
 
 	client, err := NewSimpleDNSClient(Endpoints{
 		Endpoint{net.ParseIP("8.8.8.8"), 53},
-	})
+	}, nil)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
