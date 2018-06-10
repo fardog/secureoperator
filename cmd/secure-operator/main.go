@@ -55,7 +55,7 @@ explicitly overridden:
 		false,
 		fmt.Sprintf(`Use Cloudflare defaults. When set, the following options will be used
 unless explicitly overridden:
-	dns-servers: 1.1.1.1,1.0.0.1
+	dns-servers: 1.0.0.1,1.1.1.1
 	params: ct=application/dns-json
 	endpoint: %v`, cloudflareEndpoint),
 	)
@@ -216,8 +216,8 @@ specify multiple as:
 		}
 		if len(opts.DNSServers) == 0 {
 			opts.DNSServers = []secop.Endpoint{
-				secop.Endpoint{IP: net.ParseIP("1.1.1.1"), Port: 53},
 				secop.Endpoint{IP: net.ParseIP("1.0.0.1"), Port: 53},
+				secop.Endpoint{IP: net.ParseIP("1.1.1.1"), Port: 53},
 			}
 		}
 		if _, ok := opts.QueryParameters["ct"]; !ok {
