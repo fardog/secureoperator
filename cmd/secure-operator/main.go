@@ -47,8 +47,8 @@ var (
 		false,
 		fmt.Sprintf(`Use Google defaults. When set, the following options will be used unless
 explicitly overridden:
-    dns-servers: 8.8.8.8,8.8.4.4
-    endpoint: %v`, gdnsEndpoint),
+	dns-servers: 8.8.8.8,8.8.4.4
+	endpoint: %v`, gdnsEndpoint),
 	)
 	cloudflare = flag.Bool(
 		"cloudflare",
@@ -57,7 +57,7 @@ explicitly overridden:
 unless explicitly overridden:
 	dns-servers: 1.1.1.1,1.0.0.1
 	params: ct=application/dns-json
-    endpoint: %v`, cloudflareEndpoint),
+	endpoint: %v`, cloudflareEndpoint),
 	)
 
 	// resolution of the Google DNS endpoint; the interaction of these values is
