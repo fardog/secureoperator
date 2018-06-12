@@ -10,4 +10,4 @@ COPY . /go/src/github.com/fardog/secureoperator
 WORKDIR /go/src/github.com/fardog/secureoperator/cmd/secure-operator
 RUN go install -v
 
-CMD secure-operator --listen 0.0.0.0:53
+ENTRYPOINT ["secure-operator", "--listen", "0.0.0.0:53"]

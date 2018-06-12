@@ -10,8 +10,7 @@ across the internet using HTTPS.
 It's known to work with the following providers:
 
 * [Google][dnsoverhttps] - Well tested and configured by default
-* **Alpha:** [Cloudflare][] - See [release notes](#cloudflare) for configuration
-  and caveats
+* [Cloudflare][] _(Beta)_ - May be used by passing the `--cloudflare` flag
 
 ## Installation
 
@@ -70,34 +69,6 @@ stability, either use the tagged releases or mirror on gopkg.in:
 go get -u gopkg.in/fardog/secureoperator.v3
 ```
 
-## Cloudflare
-
-[Cloudflare][] can be used as an DNS-over-HTTPS provider today, but requires
-some special configuration. Try the following:
-
-```
-$ secure-operator \
-  -endpoint https://cloudflare-dns.com/dns-query\?ct\=application/dns-json \
-  -endpoint-ips 1.1.1.1,1.0.0.1
-```
-
-Support for [Cloudflare][] as a DNS-over-HTTPS will be added as a CLI flag in
-the future, however the above will work with the current version of
-secureoperator.
-
-### Known Issues
-
-Cloudflare is not fully tested yet; it should work for common cases, however: 
-
-* Requests require a Content-Type parameter to be present in the URL, which must
-  be provided in the CLI.
-* EDNS is not supported; this is an intentional choice by Cloudflare, which
-  means any EDNS setting you provide when using Cloudflare as a provider will
-  be silently ignored.
-
-For a production environment, the Google provider (default) is your best option
-today. If you're brave, please test Cloudflare and [report any issues][issues]!
-
 ## Security
 
 Note that while DNS requests are made over HTTPS, this does not imply "secure";
@@ -130,6 +101,17 @@ following areas could use work:
 * Contributions to [reverseoperator][], the work-in-progress sibling project to
   secureoperator which enables API compatible independent DNS-over-HTTPS servers
   to be run
+
+### Known Issues
+
+Cloudflare is not fully tested yet; it should work for common cases, however: 
+
+* EDNS is not supported; this is an intentional choice by Cloudflare, which
+  means any EDNS setting you provide when using Cloudflare as a provider will
+  be silently ignored.
+
+For a production environment, the Google provider (default) is your best option
+today. If you're brave, please test Cloudflare and [report any issues][issues]!
 
 ## Acknowledgments
 

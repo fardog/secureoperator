@@ -118,6 +118,10 @@ type GDNSOptions struct {
 	// specified, Google determines this automatically. To specify that the
 	// option should not be set, use the value "0.0.0.0/0".
 	EDNSSubnet string
+	// Additional headers to be sent with requests to the DNS provider
+	Headers http.Header
+	// Additional query parameters to be sent with requests to the DNS provider
+	QueryParameters map[string][]string
 }
 
 // NewGDNSProvider creates a GDNSProvider
@@ -206,6 +210,12 @@ func (g GDNSProvider) newRequest(q DNSQuestion) (*http.Request, error) {
 		return nil, err
 	}
 
+	// set headers if provided; we don't merge these for now, as we don't set
+	// any headers by default
+	if g.opts.Headers != nil {
+		httpreq.Header = g.opts.Headers
+	}
+
 	qry := httpreq.URL.Query()
 	dnsType := fmt.Sprintf("%v", q.Type)
 
@@ -216,6 +226,15 @@ func (g GDNSProvider) newRequest(q DNSQuestion) (*http.Request, error) {
 
 	qry.Add("name", q.Name)
 	qry.Add("type", dnsType)
+
+	// add additional query parameters
+	if g.opts.QueryParameters != nil {
+		for k, vs := range g.opts.QueryParameters {
+			for _, v := range vs {
+				qry.Add(k, v)
+			}
+		}
+	}
 
 	edns := GoogleEDNSSentinelValue
 	if g.opts.UseEDNSsubnetOption {
