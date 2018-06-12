@@ -113,3 +113,38 @@ func TestCSVtoIPs(t *testing.T) {
 		}
 	}
 }
+
+func TestKeyValue(t *testing.T) {
+	kv := make(KeyValue)
+
+	kv.Set("key1=value=value")
+	kv.Set("key2=value2-1")
+	kv.Set("key2=value2-2")
+
+	if vs, ok := kv["key1"]; ok {
+		if len(vs) == 1 {
+			if vs[0] != "value=value" {
+				t.Errorf("unexpected value %v", vs[0])
+			}
+		} else {
+			t.Errorf("expected key1 value to be length 1, saw %v", vs)
+		}
+	} else {
+		t.Error("did not get value for key1")
+	}
+
+	if vs, ok := kv["key2"]; ok {
+		if len(vs) == 2 {
+			if vs[0] != "value2-1" {
+				t.Errorf("unexpected value %v", vs[0])
+			}
+			if vs[1] != "value2-2" {
+				t.Errorf("unexpected value %v", vs[1])
+			}
+		} else {
+			t.Errorf("unexpected length for %v", vs)
+		}
+	} else {
+		t.Error("did not get value for key2")
+	}
+}

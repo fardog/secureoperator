@@ -1,7 +1,7 @@
 language: go
 go:
-- 1.8
-- 1.9
+- "1.9"
+- "1.10"
 - tip
 install:
 - go get -u -v github.com/fardog/secureoperator
@@ -24,4 +24,4 @@ deploy:
   on:
     repo: fardog/secureoperator
     tags: true
-    go: 1.9
+    go: 1.10
