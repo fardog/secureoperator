@@ -1,6 +1,7 @@
 package secureoperator
 
 import (
+	"context"
 	"errors"
 	"net"
 	"testing"
@@ -120,7 +121,7 @@ func TestSimpleDNSClient(t *testing.T) {
 	var callCount int
 
 	log.SetLevel(log.FatalLevel)
-	exchange = func(m *dns.Msg, a string) (*dns.Msg, error) {
+	exchange = func(ctx context.Context, m *dns.Msg, a string) (*dns.Msg, error) {
 		callCount++
 
 		if len(m.Question) != 1 {
@@ -147,7 +148,7 @@ func TestSimpleDNSClient(t *testing.T) {
 	// test first call, should hit resolver
 	client, err := NewSimpleDNSClient(Endpoints{
 		Endpoint{net.ParseIP("8.8.8.8"), 53},
-	})
+	}, nil)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -196,13 +197,13 @@ func TestSimpleDNSClientError(t *testing.T) {
 	}()
 
 	log.SetLevel(log.FatalLevel)
-	exchange = func(m *dns.Msg, a string) (*dns.Msg, error) {
+	exchange = func(ctx context.Context, m *dns.Msg, a string) (*dns.Msg, error) {
 		return nil, errors.New("whoopsie daisy")
 	}
 
 	client, err := NewSimpleDNSClient(Endpoints{
 		Endpoint{net.ParseIP("8.8.8.8"), 53},
-	})
+	}, nil)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -214,5 +215,101 @@ func TestSimpleDNSClientError(t *testing.T) {
 
 	if err.Error() != "whoopsie daisy" {
 		t.Error("got unexpected error message")
+	}
+}
+
+func TestSimpleDNSClientTimeoutSingle(t *testing.T) {
+	exch := exchange
+	level := log.GetLevel()
+	defer func() {
+		exchange = exch
+		log.SetLevel(level)
+	}()
+
+	log.SetLevel(log.FatalLevel)
+
+	var callCount int
+	exchange = func(ctx context.Context, m *dns.Msg, a string) (*dns.Msg, error) {
+		callCount++
+		if _, ok := ctx.Deadline(); !ok {
+			t.Errorf("expected deadline")
+		}
+
+		if a == "8.8.8.8:53" {
+			return nil, &net.DNSError{IsTimeout: true}
+		}
+
+		if a != "8.8.4.4:53" {
+			t.Errorf("unexpected dns server in second call: %v", a)
+		}
+
+		r := dns.Msg{
+			Answer: []dns.RR{
+				&dns.A{
+					A:   net.ParseIP("1.2.3.4"),
+					Hdr: dns.RR_Header{Ttl: 300},
+				},
+			},
+		}
+		r.SetReply(m)
+
+		return &r, nil
+	}
+
+	client, err := NewSimpleDNSClient(Endpoints{
+		Endpoint{net.ParseIP("8.8.8.8"), 53},
+		Endpoint{net.ParseIP("8.8.4.4"), 53},
+	}, nil)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	_, err = client.LookupIP("who.wut")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if callCount != 2 {
+		t.Errorf("expected two calls to exchange, got %v", callCount)
+	}
+}
+
+func TestSimpleDNSClientTimeoutMultiple(t *testing.T) {
+	exch := exchange
+	level := log.GetLevel()
+	defer func() {
+		exchange = exch
+		log.SetLevel(level)
+	}()
+
+	log.SetLevel(log.FatalLevel)
+
+	var callCount int
+	exchange = func(ctx context.Context, m *dns.Msg, a string) (*dns.Msg, error) {
+		callCount++
+		if callCount == 1 && a != "8.8.8.8:53" {
+			t.Errorf("expected first server to be 8.8.8.8, was %v", a)
+		} else if callCount == 2 && a != "8.8.4.4:53" {
+			t.Errorf("expected second server to be 8.8.4.4, was %v", a)
+		}
+
+		return nil, &net.DNSError{IsTimeout: true}
+	}
+
+	client, err := NewSimpleDNSClient(Endpoints{
+		Endpoint{net.ParseIP("8.8.8.8"), 53},
+		Endpoint{net.ParseIP("8.8.4.4"), 53},
+	}, nil)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	_, err = client.LookupIP("who.wut")
+	if err != ErrAllServersFailed {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if callCount != 2 {
+		t.Errorf("expected two calls to exchange, got %v", callCount)
 	}
 }
