@@ -45,7 +45,7 @@ The `latest` tag will always be the build from the `master` branch. If you wish
 to use one of the stable releases, use its version tag when pulling, e.g.:
 
 ```
-docker pull fardog/secureoperator:v4.0.0
+docker pull fardog/secureoperator:4.0.1
 ```
 
 ## Caching
