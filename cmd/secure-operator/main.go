@@ -63,8 +63,8 @@ unless explicitly overridden:
 	quad9 = flag.Bool(
 		"quad9",
 		false,
-		fmt.Sprintf(`Use Quad9 defaults. Those will be used,
- unless explicitly overrriden:
+		fmt.Sprintf(`Use Quad9 defaults. When set, the following options will be used
+unless explicitly overriden:
 	dns-servers: 9.9.9.9, 149.112.112.112
 	params: ct=application/dns-json
 	endpoint : %v`, quad9Endpoint),
