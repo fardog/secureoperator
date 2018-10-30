@@ -176,7 +176,7 @@ specify multiple as:
 
 	if *google && *cloudflare || *google && *quad9 ||
 	   *cloudflare && *quad9 || *google && *cloudflare && *quad9 {
-		log.Fatalf("you may not specify `-google` and `-cloudflare` and '-quad9` arguments together")
+		log.Fatalf("you may not specify `-google` and `-cloudflare` and `-quad9` arguments together")
 	}
 
 	eips, err := cmd.CSVtoIPs(*endpointIPs)
