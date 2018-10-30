@@ -11,7 +11,7 @@ It's known to work with the following providers:
 
 * [Google][dnsoverhttps] - Well tested and configured by default
 * [Cloudflare][] _(Beta)_ - May be used by passing the `--cloudflare` flag
-
+* [Quad9][] _(Beta)_ - May be used by passing the `--quad9' flag
 ## Installation
 
 You may retrieve binaries from [the releases page][releases], or install using
