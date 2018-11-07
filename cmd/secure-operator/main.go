@@ -22,7 +22,7 @@ import (
 const (
 	gdnsEndpoint       = "https://dns.google.com/resolve"
 	cloudflareEndpoint = "https://cloudflare-dns.com/dns-query"
-	quad9Endpoint = "https://dns.quad9.net/dns-query"
+	quad9Endpoint      = "https://dns.quad9.net/dns-query"
 )
 
 var (
@@ -68,7 +68,7 @@ unless explicitly overriden:
 	dns-servers: 9.9.9.9, 149.112.112.112
 	params: ct=application/dns-json
 	endpoint : %v`, quad9Endpoint),
-        )
+	)
 	// resolution of the Google DNS endpoint; the interaction of these values is
 	// somewhat complex, and is further explained in the help message.
 	endpoint = flag.String(
@@ -175,7 +175,7 @@ specify multiple as:
 	log.SetLevel(level)
 
 	if *google && *cloudflare || *google && *quad9 ||
-	   *cloudflare && *quad9 || *google && *cloudflare && *quad9 {
+		*cloudflare && *quad9 || *google && *cloudflare && *quad9 {
 		log.Fatalf("you may not specify `-google` and `-cloudflare` and `-quad9` arguments together")
 	}
 
@@ -234,20 +234,20 @@ specify multiple as:
 			opts.QueryParameters["ct"] = []string{"application/dns-json"}
 		}
 	} else if *quad9 {
-                // override only if it's currently the default
-                if ep == gdnsEndpoint {
-                        ep = quad9Endpoint
-                }
-                if len(opts.DNSServers) == 0 {
-                        opts.DNSServers = []secop.Endpoint{
-                                secop.Endpoint{IP: net.ParseIP("9.9.9.9"), Port: 53},
-                                secop.Endpoint{IP: net.ParseIP("149.112.112.112"), Port: 53},
-                        }
-                }
-                if _, ok := opts.QueryParameters["ct"]; !ok {
-                        opts.QueryParameters["ct"] = []string{"application/dns-json"}
-                }
-        }
+		// override only if it's currently the default
+		if ep == gdnsEndpoint {
+			ep = quad9Endpoint
+		}
+		if len(opts.DNSServers) == 0 {
+			opts.DNSServers = []secop.Endpoint{
+				secop.Endpoint{IP: net.ParseIP("9.9.9.9"), Port: 53},
+				secop.Endpoint{IP: net.ParseIP("149.112.112.112"), Port: 53},
+			}
+		}
+		if _, ok := opts.QueryParameters["ct"]; !ok {
+			opts.QueryParameters["ct"] = []string{"application/dns-json"}
+		}
+	}
 
 	provider, err := secop.NewGDNSProvider(ep, opts)
 	if err != nil {
