@@ -12,6 +12,11 @@ It's known to work with the following providers:
 * [Google][dnsoverhttps] - Well tested and configured by default
 * [Cloudflare][] _(Beta)_ - May be used by passing the `--cloudflare` flag
 * [Quad9][] _(Beta)_ - May be used by passing the `--quad9' flag
+
+If you're interested in a more roll-your-own-DNS system, you might look at
+[dnoxy][], a sibling project to secureoperator which allows running your own
+DNS-over-HTTPS servers.
+
 ## Installation
 
 You may retrieve binaries from [the releases page][releases], or install using
@@ -100,9 +105,6 @@ following areas could use work:
 * More thorough unit tests
 * Installable packages for your favorite Linux distributions
 * Documentation on deploying secureoperator to a local network
-* Contributions to [reverseoperator][], the work-in-progress sibling project to
-  secureoperator which enables API compatible independent DNS-over-HTTPS servers
-  to be run
 
 ### Known Issues
 
@@ -144,5 +146,6 @@ This owes heavily to the following work:
 [semver]: http://semver.org/
 [wiki-setup]: https://github.com/fardog/secureoperator/wiki/Setting-up-dnsmasq-with-secureoperator
 [dnsmasq]: http://www.thekelleys.org.uk/dnsmasq/doc.html
-[reverseoperator]: https://github.com/fardog/reverseoperator
 [cloudflare]: https://1.1.1.1/
+[quad9]: https://www.quad9.net/
+[dnoxy]: https://github.com/fardog/dnoxy
