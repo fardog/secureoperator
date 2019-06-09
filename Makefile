@@ -1,5 +1,5 @@
-package = github.com/fardog/secureoperator
-cmd_package = $(package)/cmd/secure-operator
+package = .
+cmd_package = ./cmd/secure-operator
 
 .PHONY: release test
 .DEFAULT_GOAL := test
