@@ -5,7 +5,7 @@ import (
 	"net"
 	"strings"
 
-	secop "github.com/fardog/secureoperator"
+	secop ".."
 )
 
 // CSVtoEndpoints takes a comma-separated string of endpoints, and parses to a

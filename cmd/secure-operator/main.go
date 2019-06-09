@@ -15,8 +15,9 @@ import (
 	log "github.com/Sirupsen/logrus"
 	"github.com/miekg/dns"
 
-	secop "github.com/fardog/secureoperator"
-	"github.com/fardog/secureoperator/cmd"
+	secop "../.."
+	cmd ".."
+	//"github.com/fardog/secureoperator/cmd"
 )
 
 const (
@@ -40,6 +41,12 @@ var (
 		"level",
 		"info",
 		"Log level, one of: debug, info, warn, error, fatal, panic",
+	)
+
+	http2 = flag.Bool(
+		"http2",
+		false,
+		"Using http2 for query connection",
 	)
 
 	// one-stop configuration flags; when used, these configure sane defaults
@@ -208,6 +215,7 @@ specify multiple as:
 		EDNSSubnet:          edns,
 		QueryParameters:     map[string][]string(queryParameters),
 		Headers:             http.Header(headers),
+		HTTP2:               *http2,
 	}
 
 	// handle "sane defaults" if requested; only where settings are not explicitly

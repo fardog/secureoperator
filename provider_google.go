@@ -9,6 +9,8 @@ import (
 	"net/http"
 	"net/url"
 	"time"
+
+	"golang.org/x/net/http2"
 )
 
 const (
@@ -93,6 +95,8 @@ type GDNSResponse struct {
 
 // GDNSOptions is a configuration object for optional GDNSProvider configuration
 type GDNSOptions struct {
+	// if using http2 for query
+	HTTP2 bool
 	// Pad specifies if a DNS request should be padded to a fixed length
 	Pad bool
 	// EndpointIPs is a list of IPs to be used as the GDNS endpoint, avoiding
@@ -153,20 +157,27 @@ func NewGDNSProvider(endpoint string, opts *GDNSOptions) (*GDNSProvider, error) 
 
 	// custom transport for supporting servernames which may not match the url,
 	// in cases where we request directly against an IP
-	tr := &http.Transport{
-		Proxy: http.ProxyFromEnvironment,
-		DialContext: (&net.Dialer{
-			Timeout:   30 * time.Second,
-			KeepAlive: 30 * time.Second,
-			DualStack: true,
-		}).DialContext,
-		MaxIdleConns:          100,
-		IdleConnTimeout:       90 * time.Second,
-		TLSHandshakeTimeout:   10 * time.Second,
-		ExpectContinueTimeout: 1 * time.Second,
-		TLSClientConfig:       &tls.Config{ServerName: g.url.Host},
+	if opts.HTTP2 {
+		tr2 := &http2.Transport{
+			TLSClientConfig:       &tls.Config{ServerName: g.url.Host},
+			}
+		g.client = &http.Client{Transport: tr2}
+	}else{
+		tr := &http.Transport{
+			Proxy: http.ProxyFromEnvironment,
+			DialContext: (&net.Dialer{
+				Timeout:   30 * time.Second,
+				KeepAlive: 30 * time.Second,
+				DualStack: true,
+			}).DialContext,
+			MaxIdleConns:          100,
+			IdleConnTimeout:       90 * time.Second,
+			TLSHandshakeTimeout:   10 * time.Second,
+			ExpectContinueTimeout: 1 * time.Second,
+			TLSClientConfig:       &tls.Config{ServerName: g.url.Host},
+		}
+		g.client = &http.Client{Transport: tr}
 	}
-	g.client = &http.Client{Transport: tr}
 
 	return g, nil
 }
