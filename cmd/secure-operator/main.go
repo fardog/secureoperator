@@ -43,12 +43,6 @@ var (
 		"Log level, one of: debug, info, warn, error, fatal, panic",
 	)
 
-	http2 = flag.Bool(
-		"http2",
-		false,
-		"Using http2 for query connection",
-	)
-
 	// one-stop configuration flags; when used, these configure sane defaults
 	google = flag.Bool(
 		"google",
@@ -123,6 +117,18 @@ we specify that this option should not be used, for privacy. If
 	// variables set in main body
 	headers         = make(cmd.KeyValue)
 	queryParameters = make(cmd.KeyValue)
+
+	http2 = flag.Bool(
+		"http2",
+		false,
+		"Using http2 for query connection",
+	)
+
+	cacert = flag.String(
+		"cacert",
+		"",
+		"CA certificate for TLS establishment",
+	)
 )
 
 func serve(net string) {
@@ -216,6 +222,7 @@ specify multiple as:
 		QueryParameters:     map[string][]string(queryParameters),
 		Headers:             http.Header(headers),
 		HTTP2:               *http2,
+		CACertFilePath:       *cacert,
 	}
 
 	// handle "sane defaults" if requested; only where settings are not explicitly

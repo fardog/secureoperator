@@ -2,6 +2,7 @@ package secureoperator
 
 import (
 	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"fmt"
 	"math/rand"
@@ -9,6 +10,8 @@ import (
 	"net/http"
 	"net/url"
 	"time"
+	"os"
+	"io/ioutil"
 
 	"golang.org/x/net/http2"
 )
@@ -95,8 +98,6 @@ type GDNSResponse struct {
 
 // GDNSOptions is a configuration object for optional GDNSProvider configuration
 type GDNSOptions struct {
-	// if using http2 for query
-	HTTP2 bool
 	// Pad specifies if a DNS request should be padded to a fixed length
 	Pad bool
 	// EndpointIPs is a list of IPs to be used as the GDNS endpoint, avoiding
@@ -126,6 +127,12 @@ type GDNSOptions struct {
 	Headers http.Header
 	// Additional query parameters to be sent with requests to the DNS provider
 	QueryParameters map[string][]string
+
+	// if using http2 for query
+	HTTP2 bool
+
+	// using specific CA cert file for TLS establishment
+	CACertFilePath string
 }
 
 // NewGDNSProvider creates a GDNSProvider
@@ -155,14 +162,33 @@ func NewGDNSProvider(endpoint string, opts *GDNSOptions) (*GDNSProvider, error) 
 		g.dns = d
 	}
 
-	// custom transport for supporting servernames which may not match the url,
-	// in cases where we request directly against an IP
+	// Create TLS configuration with the certificate of the server
+	tlsConfig := &tls.Config{
+		ServerName: g.url.Host,
+	}
+
+	// using custom CA certificate
+	if _, err := os.Stat(opts.CACertFilePath); err == nil {
+		caCert, err := ioutil.ReadFile(opts.CACertFilePath)
+		if err != nil {
+			fmt.Errorf("read custom CA certificate failed : %s", err)
+		}
+		caCertPool := x509.NewCertPool()
+		caCertPool.AppendCertsFromPEM(caCert)
+		tlsConfig.RootCAs = caCertPool
+	}else{
+		fmt.Errorf("specified CA cert don't exist.")
+	}
+	
 	if opts.HTTP2 {
+		// custom transport for http2 connection.
 		tr2 := &http2.Transport{
-			TLSClientConfig:       &tls.Config{ServerName: g.url.Host},
+			TLSClientConfig:      tlsConfig,
 			}
 		g.client = &http.Client{Transport: tr2}
 	}else{
+		// custom transport for supporting servernames which may not match the url,
+		// in cases where we request directly against an IP
 		tr := &http.Transport{
 			Proxy: http.ProxyFromEnvironment,
 			DialContext: (&net.Dialer{
@@ -174,7 +200,7 @@ func NewGDNSProvider(endpoint string, opts *GDNSOptions) (*GDNSProvider, error) 
 			IdleConnTimeout:       90 * time.Second,
 			TLSHandshakeTimeout:   10 * time.Second,
 			ExpectContinueTimeout: 1 * time.Second,
-			TLSClientConfig:       &tls.Config{ServerName: g.url.Host},
+			TLSClientConfig:       tlsConfig,
 		}
 		g.client = &http.Client{Transport: tr}
 	}
