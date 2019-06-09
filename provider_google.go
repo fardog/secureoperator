@@ -2,13 +2,18 @@ package secureoperator
 
 import (
 	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"math/rand"
 	"net"
 	"net/http"
 	"net/url"
+	"os"
 	"time"
+
+	"golang.org/x/net/http2"
 )
 
 const (
@@ -122,6 +127,12 @@ type GDNSOptions struct {
 	Headers http.Header
 	// Additional query parameters to be sent with requests to the DNS provider
 	QueryParameters map[string][]string
+
+	// if using http2 for query
+	HTTP2 bool
+
+	// using specific CA cert file for TLS establishment
+	CACertFilePath string
 }
 
 // NewGDNSProvider creates a GDNSProvider
@@ -151,22 +162,48 @@ func NewGDNSProvider(endpoint string, opts *GDNSOptions) (*GDNSProvider, error) 
 		g.dns = d
 	}
 
-	// custom transport for supporting servernames which may not match the url,
-	// in cases where we request directly against an IP
-	tr := &http.Transport{
-		Proxy: http.ProxyFromEnvironment,
-		DialContext: (&net.Dialer{
-			Timeout:   30 * time.Second,
-			KeepAlive: 30 * time.Second,
-			DualStack: true,
-		}).DialContext,
-		MaxIdleConns:          100,
-		IdleConnTimeout:       90 * time.Second,
-		TLSHandshakeTimeout:   10 * time.Second,
-		ExpectContinueTimeout: 1 * time.Second,
-		TLSClientConfig:       &tls.Config{ServerName: g.url.Host},
+	// Create TLS configuration with the certificate of the server
+	tlsConfig := &tls.Config{
+		ServerName: g.url.Host,
 	}
-	g.client = &http.Client{Transport: tr}
+
+	// using custom CA certificate
+	if _, err := os.Stat(opts.CACertFilePath); err == nil {
+		caCert, err := ioutil.ReadFile(opts.CACertFilePath)
+		if err != nil {
+			fmt.Errorf("read custom CA certificate failed : %s", err)
+		}
+		caCertPool := x509.NewCertPool()
+		caCertPool.AppendCertsFromPEM(caCert)
+		tlsConfig.RootCAs = caCertPool
+	} else {
+		fmt.Errorf("specified CA cert don't exist.")
+	}
+
+	if opts.HTTP2 {
+		// custom transport for http2 connection.
+		tr2 := &http2.Transport{
+			TLSClientConfig: tlsConfig,
+		}
+		g.client = &http.Client{Transport: tr2}
+	} else {
+		// custom transport for supporting servernames which may not match the url,
+		// in cases where we request directly against an IP
+		tr := &http.Transport{
+			Proxy: http.ProxyFromEnvironment,
+			DialContext: (&net.Dialer{
+				Timeout:   30 * time.Second,
+				KeepAlive: 30 * time.Second,
+				DualStack: true,
+			}).DialContext,
+			MaxIdleConns:          100,
+			IdleConnTimeout:       90 * time.Second,
+			TLSHandshakeTimeout:   10 * time.Second,
+			ExpectContinueTimeout: 1 * time.Second,
+			TLSClientConfig:       tlsConfig,
+		}
+		g.client = &http.Client{Transport: tr}
+	}
 
 	return g, nil
 }
