@@ -1,130 +1,48 @@
-package secureoperator
+package main
 
 import (
+	"context"
 	"crypto/tls"
 	"crypto/x509"
-	"encoding/json"
+	"errors"
 	"fmt"
+	"github.com/miekg/dns"
 	"io/ioutil"
 	"math/rand"
 	"net"
 	"net/http"
 	"net/url"
 	"os"
+	"strconv"
 	"time"
-
-	"golang.org/x/net/http2"
 )
 
 const (
-	// DNSNameMaxBytes is the maximum number of bytes a DNS name may contain
-	DNSNameMaxBytes = 253
+	// MaxBytesOfDNSName is the maximum number of bytes a DNS name may contain
+	MaxBytesOfDNSName = 253
 	// GoogleEDNSSentinelValue is the value that when sent to Google as the
 	// EDNS value, means "do not use EDNS".
 	GoogleEDNSSentinelValue = "0.0.0.0/0"
-	// max number of characters in a 16-bit uint integer, converted to string
-	extraPad         = 5
-	paddingParameter = "random_padding"
+	PaddingParameter        = "random_padding"
+	ContentType             = "application/dns-message"
+	MaxBytesOfDNSQuestionMessage = 512
 )
-
-// GDNSQuestion represents a question response item from Google's DNS service
-// This is currently the same as DNSQuestion, our internal implementation, but
-// since Google's API is in flux, we keep them separate
-type GDNSQuestion DNSQuestion
-
-// DNSQuestion transforms a GDNSQuestion to a DNSQuestion and returns it.
-func (r GDNSQuestion) DNSQuestion() DNSQuestion {
-	return DNSQuestion{
-		Name: r.Name,
-		Type: r.Type,
-	}
-}
-
-// GDNSQuestions is a array of GDNSQuestion objects
-type GDNSQuestions []GDNSQuestion
-
-// DNSQuestions transforms an array of GDNSQuestion objects to an array of
-// DNSQuestion objects
-func (rs GDNSQuestions) DNSQuestions() (rqs []DNSQuestion) {
-	for _, r := range rs {
-		rqs = append(rqs, r.DNSQuestion())
-	}
-
-	return
-}
-
-// GDNSRR represents a dns response record item from Google's DNS service.
-// This is currently the same as DNSRR, our internal implementation, but since
-// Google's API is in flux, we keep them separate
-type GDNSRR DNSRR
-
-// DNSRR transforms a GDNSRR to a DNSRR
-func (r GDNSRR) DNSRR() DNSRR {
-	return DNSRR{
-		Name: r.Name,
-		Type: r.Type,
-		TTL:  r.TTL,
-		Data: r.Data,
-	}
-}
-
-// GDNSRRs represents an array of GDNSRR objects
-type GDNSRRs []GDNSRR
-
-// DNSRRs transforms an array of GDNSRR objects to an array of DNSRR objects
-func (rs GDNSRRs) DNSRRs() (rrs []DNSRR) {
-	for _, r := range rs {
-		rrs = append(rrs, r.DNSRR())
-	}
-
-	return
-}
-
-// GDNSResponse represents a response from the Google DNS-over-HTTPS servers
-type GDNSResponse struct {
-	Status           int32         `json:"Status"`
-	TC               bool          `json:"TC"`
-	RD               bool          `json:"RD"`
-	RA               bool          `json:"RA"`
-	AD               bool          `json:"AD"`
-	CD               bool          `json:"CD"`
-	Question         GDNSQuestions `json:"Question,omitempty"`
-	Answer           GDNSRRs       `json:"Answer,omitempty"`
-	Authority        GDNSRRs       `json:"Authority,omitempty"`
-	Additional       GDNSRRs       `json:"Additional,omitempty"`
-	EDNSClientSubnet string        `json:"edns_client_subnet,omitempty"`
-	Comment          string        `json:"Comment,omitempty"`
-}
 
 // GDNSOptions is a configuration object for optional GDNSProvider configuration
 type GDNSOptions struct {
-	// Pad specifies if a DNS request should be padded to a fixed length
-	Pad bool
 	// EndpointIPs is a list of IPs to be used as the GDNS endpoint, avoiding
 	// DNS lookups in the case where they are provided. One is chosen randomly
 	// for each request.
+
 	EndpointIPs []net.IP
-	// DNSServers is a list of Endpoints to be used as DNS servers when looking
-	// up the endpoint; if not provided, the system DNS resolver is used.
-	DNSServers Endpoints
-	// UseEDNSSubnetOption is an option which must be specified to enable an
-	// EDNS value other than the default of "0.0.0.0/0", which is Google's
-	// sentinel value for "do not send EDNS with this request".
-	//
-	// When this option is false, the value in EDNSSubnet is ignored.
-	//
-	// This temporary option exists because the API change may have been
-	// dangerous to consumers of this library: to send EDNS by default.
-	//
-	// Deprecated: this option will be removed in v4, and the default behavior
-	// will be that Google decides EDNS behavior.
-	UseEDNSsubnetOption bool
 	// The EDNS subnet to send in the edns0-client-subnet option. If not
 	// specified, Google determines this automatically. To specify that the
 	// option should not be set, use the value "0.0.0.0/0".
+
 	EDNSSubnet string
 	// Additional headers to be sent with requests to the DNS provider
 	Headers http.Header
+
 	// Additional query parameters to be sent with requests to the DNS provider
 	QueryParameters map[string][]string
 
@@ -133,6 +51,11 @@ type GDNSOptions struct {
 
 	// using specific CA cert file for TLS establishment
 	CACertFilePath string
+
+	// Reply All AAAA Questions with a Empty Answer
+	NoAAAA bool
+
+	Alternative bool
 }
 
 // NewGDNSProvider creates a GDNSProvider
@@ -153,15 +76,6 @@ func NewGDNSProvider(endpoint string, opts *GDNSOptions) (*GDNSProvider, error) 
 		opts:     opts,
 	}
 
-	if len(opts.DNSServers) > 0 {
-		d, err := NewSimpleDNSClient(opts.DNSServers, nil)
-		if err != nil {
-			return nil, err
-		}
-
-		g.dns = d
-	}
-
 	// Create TLS configuration with the certificate of the server
 	tlsConfig := &tls.Config{
 		ServerName: g.url.Host,
@@ -171,39 +85,36 @@ func NewGDNSProvider(endpoint string, opts *GDNSOptions) (*GDNSProvider, error) 
 	if _, err := os.Stat(opts.CACertFilePath); err == nil {
 		caCert, err := ioutil.ReadFile(opts.CACertFilePath)
 		if err != nil {
-			fmt.Errorf("read custom CA certificate failed : %s", err)
+			_ = fmt.Errorf("read custom CA certificate failed : %s", err)
 		}
 		caCertPool := x509.NewCertPool()
 		caCertPool.AppendCertsFromPEM(caCert)
 		tlsConfig.RootCAs = caCertPool
 	} else {
-		fmt.Errorf("specified CA cert don't exist.")
+		_ = fmt.Errorf("specified CA cert don't exist.")
 	}
 
-	if opts.HTTP2 {
-		// custom transport for http2 connection.
-		tr2 := &http2.Transport{
-			TLSClientConfig: tlsConfig,
-		}
-		g.client = &http.Client{Transport: tr2}
-	} else {
-		// custom transport for supporting servernames which may not match the url,
-		// in cases where we request directly against an IP
-		tr := &http.Transport{
-			Proxy: http.ProxyFromEnvironment,
-			DialContext: (&net.Dialer{
-				Timeout:   30 * time.Second,
-				KeepAlive: 30 * time.Second,
-				DualStack: true,
-			}).DialContext,
-			MaxIdleConns:          100,
-			IdleConnTimeout:       90 * time.Second,
-			TLSHandshakeTimeout:   10 * time.Second,
-			ExpectContinueTimeout: 1 * time.Second,
-			TLSClientConfig:       tlsConfig,
-		}
-		g.client = &http.Client{Transport: tr}
+	dialer := &net.Dialer{
+		Timeout:   30 * time.Second,
+		KeepAlive: 30 * time.Second,
 	}
+	// custom transport for supporting servernames which may not match the url,
+	// in cases where we request directly against an IP
+	tr := &http.Transport{
+		TLSClientConfig:   tlsConfig,
+		ForceAttemptHTTP2: opts.HTTP2,
+		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+			if len(opts.EndpointIPs) > 0 {
+				_, p, err := net.SplitHostPort(addr)
+				if err == nil {
+					ip := opts.EndpointIPs[rand.Intn(len(opts.EndpointIPs))]
+					addr = net.JoinHostPort(ip.String(), p)
+				}
+			}
+			return dialer.DialContext(ctx, network, addr)
+		},
+	}
+	g.client = &http.Client{Transport: tr}
 
 	return g, nil
 }
@@ -215,32 +126,11 @@ type GDNSProvider struct {
 	url      *url.URL
 	host     string
 	opts     *GDNSOptions
-	dns      *SimpleDNSClient
 	client   *http.Client
 }
 
-func (g GDNSProvider) newRequest(q DNSQuestion) (*http.Request, error) {
+func (g GDNSProvider) newRequest(msg *dns.Msg) (*http.Request, error) {
 	u := *g.url
-
-	var mustSendHost bool
-
-	if l := len(g.opts.EndpointIPs); l > 0 {
-		// if endpointIPs are provided, use one of those
-		u.Host = g.opts.EndpointIPs[rand.Intn(l)].String()
-		mustSendHost = true
-	} else if g.dns != nil {
-		ips, err := g.dns.LookupIP(u.Host)
-		if err != nil {
-			return nil, err
-		}
-
-		if l := len(ips); l > 0 {
-			u.Host = ips[rand.Intn(l)].String()
-		} else {
-			return nil, fmt.Errorf("lookup for Google DNS host %v failed", u.Host)
-		}
-		mustSendHost = true
-	}
 
 	httpreq, err := http.NewRequest(http.MethodGet, u.String(), nil)
 	if err != nil {
@@ -254,14 +144,14 @@ func (g GDNSProvider) newRequest(q DNSQuestion) (*http.Request, error) {
 	}
 
 	qry := httpreq.URL.Query()
-	dnsType := fmt.Sprintf("%v", q.Type)
+	dnsType := fmt.Sprintf("%v", msg.Question[0].Qtype)
 
-	l := len([]byte(q.Name))
-	if l > DNSNameMaxBytes {
+	l := len([]byte(msg.Question[0].Name))
+	if l > MaxBytesOfDNSName {
 		return nil, fmt.Errorf("name length of %v exceeds DNS name max length", l)
 	}
 
-	qry.Add("name", q.Name)
+	qry.Add("name", msg.Question[0].Name)
 	qry.Add("type", dnsType)
 
 	// add additional query parameters
@@ -273,63 +163,178 @@ func (g GDNSProvider) newRequest(q DNSQuestion) (*http.Request, error) {
 		}
 	}
 
-	edns := GoogleEDNSSentinelValue
-	if g.opts.UseEDNSsubnetOption {
-		edns = g.opts.EDNSSubnet
-	}
-	if edns != "" {
-		qry.Add("edns_client_subnet", edns)
+	edns_subnet := GoogleEDNSSentinelValue
+
+	if edns_subnet != "" {
+		qry.Add("edns_client_subnet", edns_subnet)
 	}
 
+	random_padding := strconv.FormatInt(time.Now().UnixNano(), 10)
+	qry.Add(PaddingParameter, random_padding)
+
+	qry.Add("ct", ContentType)
 	httpreq.URL.RawQuery = qry.Encode()
-
-	if g.opts.Pad {
-		// pad to the maximum size a valid request could be. we add `1` because
-		// Google's DNS service ignores a trailing period, increasing the
-		// possible size of a name by 1
-		pad := randSeq(DNSNameMaxBytes + extraPad - l - len(dnsType) + 1)
-		qry.Add(paddingParameter, pad)
-
-		httpreq.URL.RawQuery = qry.Encode()
-	}
-
-	if mustSendHost {
-		httpreq.Host = g.url.Host
-	}
 
 	return httpreq, nil
 }
 
-// Query sends a DNS question to Google, and returns the response
-func (g GDNSProvider) Query(q DNSQuestion) (*DNSResponse, error) {
-	httpreq, err := g.newRequest(q)
+func (g GDNSProvider) DoHTTPRequest(c_req <-chan *http.Request, c_rsp chan *http.Response) {
+	httpresp, err := g.client.Do(<-c_req)
+
+	if err != nil {
+		c_rsp <- nil
+		log.Errorln("HttpRequest Error", err)
+	} else {
+		c_rsp <- httpresp
+	}
+}
+
+func(g GDNSProvider) FireDoDoHRequest(req *http.Request)(*http.Response, error){
+	c_req := make(chan *http.Request)
+	c_rsp := make(chan *http.Response)
+
+	defer close(c_req)
+	defer close(c_rsp)
+
+	go g.DoHTTPRequest(c_req, c_rsp)
+	c_req <- req
+
+	httpresp := <-c_rsp
+
+	if httpresp == nil {
+		return nil, errors.New("HttpRequest Error occured")
+	}else{
+		return httpresp, nil
+	}
+}
+
+func makeFakeAnswer(msg *dns.Msg)(msg_reply *dns.Msg){
+	reply_fake := dns.Msg{
+		dns.MsgHdr{
+			Id: msg.Id,
+		},
+		msg.Compress,
+		msg.Question,
+		nil,
+		nil,
+		nil,
+	}
+	reply_fake_final := msg.SetReply(&reply_fake)
+	return reply_fake_final
+}
+
+// UrlSimpleParamsQuery sends a DNS question to Google, and returns the response
+func (g GDNSProvider) UrlSimpleParamsQuery(msg *dns.Msg) ([]byte, error) {
+	// Return fake answer (SOA or empty) if NoAAAA option is on.
+	var isNoAAAA bool
+	var fake_answer *dns.Msg
+	if g.opts.NoAAAA {
+		for _, q := range msg.Question {
+			if q.Qtype == dns.TypeAAAA {
+				q.Qtype = dns.TypeSOA
+				isNoAAAA = true
+				fake_answer = makeFakeAnswer(msg)
+				break
+			}
+		}
+	}
+
+	log_debug("Dns Question Msg: \n", msg)
+
+	httpreq, err := g.newRequest(msg)
 	if err != nil {
 		return nil, err
 	}
 
-	httpresp, err := g.client.Do(httpreq)
-	if err != nil {
-		return nil, err
-	}
-	defer httpresp.Body.Close()
-
-	dnsResp := new(GDNSResponse)
-	decoder := json.NewDecoder(httpresp.Body)
-	err = decoder.Decode(&dnsResp)
+	httpresp, err := g.FireDoDoHRequest(httpreq)
 	if err != nil {
 		return nil, err
 	}
 
-	return &DNSResponse{
-		Question:           dnsResp.Question.DNSQuestions(),
-		Answer:             dnsResp.Answer.DNSRRs(),
-		Authority:          dnsResp.Authority.DNSRRs(),
-		Extra:              dnsResp.Additional.DNSRRs(),
-		Truncated:          dnsResp.TC,
-		RecursionDesired:   dnsResp.RD,
-		RecursionAvailable: dnsResp.RA,
-		AuthenticatedData:  dnsResp.AD,
-		CheckingDisabled:   dnsResp.CD,
-		ResponseCode:       int(dnsResp.Status),
-	}, nil
+	raw_response, err := ioutil.ReadAll(httpresp.Body)
+
+	if err != nil {
+		return nil, err
+	}
+
+	log_debug("Dns Question Msg: \n", msg)
+
+	// dns.google/resolve return DNS Answer with no ID,
+	// modify it after unpack DNS Message.
+	id_original := msg.Id
+	err = msg.Unpack(raw_response)
+	msg.Id = id_original
+
+	if isNoAAAA {
+		if fake_answer != nil{
+			fake_answer.Ns = msg.Ns
+		}
+		return fake_answer.Pack()
+	}
+
+	log.Debug("Dns Answer Msg: \n", msg)
+	if err != nil {
+		return nil, err
+	}
+	return msg.Pack()
+}
+
+func (g GDNSProvider) StandardQuery(msg *dns.Msg)([]byte, error){
+	// Return fake answer (SOA or empty) if NoAAAA option is on.
+	var isNoAAAA bool
+	var fake_answer *dns.Msg
+	if g.opts.NoAAAA {
+		for _, q := range msg.Question {
+			if q.Qtype == dns.TypeAAAA {
+				q.Qtype = dns.TypeSOA
+				isNoAAAA = true
+				fake_answer = makeFakeAnswer(msg)
+				break
+			}
+		}
+	}
+
+	log_debug("Dns Question Msg: \n", msg)
+
+	httpreq, err := g.newRequest(msg)
+	if err != nil {
+		return nil, err
+	}
+
+	httpresp, err := g.FireDoDoHRequest(httpreq)
+	if err != nil {
+		return nil, err
+	}
+
+	raw_response, err := ioutil.ReadAll(httpresp.Body)
+
+	if err != nil {
+		return nil, err
+	}
+
+	log_debug("Dns Question Msg: \n", msg)
+
+	// dns.google/resolve return DNS Answer with no ID,
+	// modify it after unpack DNS Message.
+	id_original := msg.Id
+	err = msg.Unpack(raw_response)
+	msg.Id = id_original
+
+	if isNoAAAA {
+		if fake_answer != nil{
+			fake_answer.Ns = msg.Ns
+		}
+		return fake_answer.Pack()
+	}
+
+	log.Debug("Dns Answer Msg: \n", msg)
+	if err != nil {
+		return nil, err
+	}
+	return msg.Pack()
+}
+
+func (g GDNSProvider) Query(msg *dns.Msg)([]byte, error) {
+
+	return g.UrlSimpleParamsQuery(msg)
 }

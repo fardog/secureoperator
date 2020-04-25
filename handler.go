@@ -1,12 +1,13 @@
-package secureoperator
+package main
 
 import (
-	log "github.com/Sirupsen/logrus"
 	"github.com/miekg/dns"
 )
 
 // HandlerOptions specifies options to be used when instantiating a handler
-type HandlerOptions struct{}
+type HandlerOptions struct{
+	Cache bool
+}
 
 // Handler represents a DNS handler
 type Handler struct {
@@ -20,72 +21,21 @@ func NewHandler(provider Provider, options *HandlerOptions) *Handler {
 }
 
 // Handle handles a DNS request
-func (h *Handler) Handle(w dns.ResponseWriter, r *dns.Msg) {
-	q := DNSQuestion{
-		Name: r.Question[0].Name,
-		Type: r.Question[0].Qtype,
-	}
-	log.Infoln("requesting", q.Name, dns.TypeToString[q.Type])
+func (h *Handler) Handle(writer dns.ResponseWriter, msg *dns.Msg) {
+	log.Infoln("requesting", msg.Question[0].Name, dns.TypeToString[msg.Question[0].Qtype])
 
-	dnsResp, err := h.provider.Query(q)
+	bytes, err := h.provider.Query(msg)
 	if err != nil {
 		log.Errorln("provider failed", err)
-		dns.HandleFailed(w, r)
+		dns.HandleFailed(writer, msg)
 		return
 	}
 
-	questions := []dns.Question{}
-	for idx, c := range dnsResp.Question {
-		questions = append(questions, dns.Question{
-			Name:   c.Name,
-			Qtype:  c.Type,
-			Qclass: r.Question[idx].Qclass,
-		})
-	}
-
-	// Parse google RRs to DNS RRs
-	answers := transformRR(dnsResp.Answer, "answer")
-	authorities := transformRR(dnsResp.Authority, "authority")
-	extras := transformRR(dnsResp.Extra, "extra")
-
-	resp := dns.Msg{
-		MsgHdr: dns.MsgHdr{
-			Id:                 r.Id,
-			Response:           (dnsResp.ResponseCode == 0),
-			Opcode:             dns.OpcodeQuery,
-			Authoritative:      false,
-			Truncated:          dnsResp.Truncated,
-			RecursionDesired:   dnsResp.RecursionDesired,
-			RecursionAvailable: dnsResp.RecursionAvailable,
-			AuthenticatedData:  dnsResp.AuthenticatedData,
-			CheckingDisabled:   dnsResp.CheckingDisabled,
-			Rcode:              dnsResp.ResponseCode,
-		},
-		Compress: r.Compress,
-		Question: questions,
-		Answer:   answers,
-		Ns:       authorities,
-		Extra:    extras,
-	}
-
 	// Write the response
-	err = w.WriteMsg(&resp)
+	c, err := writer.Write(bytes)
 	if err != nil {
 		log.Errorln("Error writing DNS response:", err)
+	}else{
+		log.Debugln("Writen bytes:", c)
 	}
-}
-
-// for a given []DNSRR, transform to dns.RR, logging if any errors occur
-func transformRR(rrs []DNSRR, logType string) []dns.RR {
-	var t []dns.RR
-
-	for _, r := range rrs {
-		if rr, err := r.RR(); err != nil {
-			log.Errorln("unable to translate record rr", logType, r, err)
-		} else {
-			t = append(t, rr)
-		}
-	}
-
-	return t
 }
