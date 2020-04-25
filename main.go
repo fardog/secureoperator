@@ -201,16 +201,16 @@ specify multiple as:
 		protocols = append(protocols, "udp")
 	}
 
-	// start the servers
-	servers := make(chan bool)
-	for _, protocol := range protocols {
-		go func(protocol string, c <- chan bool) {
-			serve(protocol)
-		}(protocol, servers)
-		servers <- true
+	// start the servers and wait for exit.
+	servers := make(chan string)
+	defer close(servers)
+	for _, p := range protocols{
+		go func(protocol <- chan string) {
+			serve(<-protocol)
+		}(servers)
+		servers <- p
 	}
-
-	for 
+	<- servers
 
 	log.Infoln("servers exited, stopping")
 }

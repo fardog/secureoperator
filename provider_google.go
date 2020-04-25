@@ -165,9 +165,7 @@ func (g GDNSProvider) newRequest(msg *dns.Msg) (*http.Request, error) {
 
 	edns_subnet := GoogleEDNSSentinelValue
 
-	if edns_subnet != "" {
-		qry.Add("edns_client_subnet", edns_subnet)
-	}
+	qry.Add("edns_client_subnet", edns_subnet)
 
 	random_padding := strconv.FormatInt(time.Now().UnixNano(), 10)
 	qry.Add(PaddingParameter, random_padding)
