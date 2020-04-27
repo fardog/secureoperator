@@ -6,8 +6,6 @@ go:
 - tip
 install:
 - go get -u -v github.com/tinkernels/doh-proxy
-- go get -u -v github.com/tinkernels/doh-proxy/cmd
-- go get -u -v github.com/tinkernels/doh-proxy/cmd/main
 before_deploy: "make release"
 deploy:
   provider: releases
