@@ -4,7 +4,7 @@ import (
 	"github.com/miekg/dns"
 )
 
-// Provider is an interface representing a servicer of DNS queries.
+// Provider is an interface representing a service of DNS queries.
 type Provider interface {
-	Query(msg *dns.Msg) ([]byte, error)
+	Query(msg *dns.Msg) (*dns.Msg, error)
 }

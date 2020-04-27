@@ -24,7 +24,7 @@ func TestQuery(t *testing.T) {
 			t.Errorf("unexpected type in query: %v", tp)
 		}
 
-		if ed := q.Get("edns_client_subnet"); ed != GoogleEDNSSentinelValue {
+		if ed := q.Get("edns_client_subnet"); ed != EDNSSentinelValue {
 			t.Errorf("expected EDNS to be set to Google sentinel value, was: %v", ed)
 		}
 
@@ -34,7 +34,7 @@ func TestQuery(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	_, err := NewGDNSProvider(ts.URL, nil)
+	_, err := NewDMProvider(ts.URL, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -60,7 +60,7 @@ func TestEDNS(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	_, err := NewGDNSProvider(ts.URL, &GDNSOptions{
+	_, err := NewDMProvider(ts.URL, &DMProviderOptions{
 		EDNSSubnet:          "64.10.0.0/20",
 	})
 	if err != nil {
@@ -88,7 +88,7 @@ func TestEDNSOmittedWhenBlank(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	_, err := NewGDNSProvider(ts.URL, &GDNSOptions{
+	_, err := NewDMProvider(ts.URL, &DMProviderOptions{
 		EDNSSubnet:          "",
 	})
 	if err != nil {
@@ -117,7 +117,7 @@ func TestEDNSIgnoredByDefault(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	_, err := NewGDNSProvider(ts.URL, &GDNSOptions{
+	_, err := NewDMProvider(ts.URL, &DMProviderOptions{
 		EDNSSubnet: "64.10.0.0/20",
 	})
 	if err != nil {

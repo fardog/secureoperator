@@ -13,14 +13,14 @@ import (
 	"syscall"
 	"time"
 
-	nested_formatter "github.com/antonfisher/nested-logrus-formatter"
+	nestedformatter "github.com/antonfisher/nested-logrus-formatter"
 	"github.com/miekg/dns"
 	"github.com/sirupsen/logrus"
 	"github.com/zput/zxcTool/ztLog/zt_formatter"
 )
 
 const (
-	gdnsEndpoint       = "https://dns.google/dns-query"
+	gdnsEndpoint = "https://dns.google/dns-query"
 )
 
 // Create a new instance of the logger. You can have any number of instances.
@@ -58,7 +58,7 @@ randomly chosen for each request, failed requests are not retried.`,
 	)
 	ednsSubnetFlag = flag.String(
 		"edns-subnet",
-		"no",
+		"auto",
 		`Specify a subnet to be sent in the edns0-client-subnet option;
 take your own risk of privacy to use this option;
 no: will not use edns_subnet;
@@ -93,24 +93,25 @@ net/mask: will use specified subnet, e.g. 66.66.66.66/24.
 		false,
 		`Reply all AAAA questions with a fake answer`,
 	)
+	dnsResolverFlag = flag.String(
+		"dns-resolver",
+		"",
+		`dns resolver for retrieve ip of DoH enpoint host, e.g. "8.8.8.8:53";
+NOTICE: only resolve to IPv4`,
+		)
 )
 
-func serve(net string) {
-	log.Infof("starting %s service on %s", net, *listenAddressFlag)
+func serve(net <- chan string) {
+	listenNet := <- net
+	log.Infof("starting %s service on %s", listenNet, *listenAddressFlag)
 
-	server := &dns.Server{Addr: *listenAddressFlag, Net: net, TsigSecret: nil}
-	go func() {
-		if err := server.ListenAndServe(); err != nil {
-			log.Fatalf("Failed to setup the %s server: %s\n", net, err.Error())
-		}
-	}()
+	server := &dns.Server{Addr: *listenAddressFlag, Net: listenNet, TsigSecret: nil}
 
-	// serve until exit
-	sig := make(chan os.Signal)
-	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
-	<-sig
+	if err := server.ListenAndServe(); err != nil {
+		log.Fatalf("Failed to setup the %s server: %s\n", listenNet, err.Error())
+	}
 
-	log.Infof("shutting down %s on interrupt\n", net)
+	log.Infof("shutting down %s on interrupt\n", listenNet)
 	if err := server.Shutdown(); err != nil {
 		log.Errorf("got unexpected error %s", err.Error())
 	}
@@ -157,7 +158,7 @@ specify multiple as:
 			filename := path.Base(f.File)
 			return fmt.Sprintf("%s()", f.Function), fmt.Sprintf("%s:%d", filename, f.Line)
 		},
-		Formatter: nested_formatter.Formatter{
+		Formatter: nestedformatter.Formatter{
 			// HideKeys: true,
 			FieldsOrder: []string{"component", "category"},
 		},
@@ -172,7 +173,7 @@ specify multiple as:
 	}
 
 	ep := *endpointFlag
-	opts := &GDNSOptions{
+	opts := &DMProviderOptions{
 		EndpointIPs:     endpointIps,
 		EDNSSubnet:      *ednsSubnetFlag,
 		QueryParameters: map[string][]string(queryParameters),
@@ -180,10 +181,11 @@ specify multiple as:
 		HTTP2:           *http2Flag,
 		CACertFilePath:  *cacertFlag,
 		NoAAAA:          *noAAAAFlag,
-		Alternative:	 *googleFlag,
+		Alternative:     *googleFlag,
+		DnsResolver:     *dnsResolverFlag,
 	}
 
-	provider, err := NewGDNSProvider(ep, opts)
+	provider, err := NewDMProvider(ep, opts)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -204,13 +206,15 @@ specify multiple as:
 	// start the servers and wait for exit.
 	servers := make(chan string)
 	defer close(servers)
-	for _, p := range protocols{
-		go func(protocol <- chan string) {
-			serve(<-protocol)
-		}(servers)
+	for _, p := range protocols {
+		go serve(servers)
 		servers <- p
 	}
-	<- servers
+
+	// serve until exit
+	sig := make(chan os.Signal)
+	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
+	<- sig
 
 	log.Infoln("servers exited, stopping")
 }

@@ -8,9 +8,8 @@ import (
 	"strings"
 )
 
-var letters = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-._~")
-
 func GenerateUrlSafeString(n int) string {
+	letters := []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-._~")
 	b := make([]rune, n)
 	for i := range b {
 		b[i] = letters[rand.Intn(len(letters))]
@@ -66,12 +65,36 @@ func (k KeyValue) String() string {
 	return strings.Join(s, " ")
 }
 
-func log_debug(args ...interface{}){
-	lvl, err :=  logrus.ParseLevel(*logLevelFlag)
-	if err != nil{
+func logDebug(args ...interface{}) {
+	lvl, err := logrus.ParseLevel(*logLevelFlag)
+	if err != nil {
 		return
 	}
-	if log.IsLevelEnabled(lvl){
+	if log.IsLevelEnabled(lvl) {
 		log.Debug(args...)
 	}
+}
+
+func IsLocalListen(addr string)bool{
+	localNets := []string{
+		"127.0.0.1",
+		"0.0.0.0",
+		"::1",
+		"::",
+		"localhost",
+	}
+	h, _, err := net.SplitHostPort(addr)
+	if err != nil {
+		return false
+	}
+	for _, ch := range localNets{
+		if ch == h {
+			return true
+		}
+	}
+	return false
+}
+
+func obtainCurrentExternalIP() {
+
 }

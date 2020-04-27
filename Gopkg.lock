@@ -34,6 +34,14 @@
   version = "v1.5.0"
 
 [[projects]]
+  branch = "master"
+  digest = "1:c63b437fb5bd075409a69c0e15b21476525488eedf029cb85a9caaee29b26733"
+  name = "github.com/tinkernels/go-forceexport"
+  packages = ["."]
+  pruneopts = ""
+  revision = "8f1d6941cd755b975763ddb1f836561edddac2b8"
+
+[[projects]]
   digest = "1:96146cca64370259f22d12d414ccd163132542653d2da23d1dbaaa3188299b65"
   name = "github.com/zput/zxcTool"
   packages = ["ztLog/zt_formatter"]
@@ -116,6 +124,7 @@
     "github.com/antonfisher/nested-logrus-formatter",
     "github.com/miekg/dns",
     "github.com/sirupsen/logrus",
+    "github.com/tinkernels/go-forceexport",
     "github.com/zput/zxcTool/ztLog/zt_formatter",
   ]
   solver-name = "gps-cdcl"
