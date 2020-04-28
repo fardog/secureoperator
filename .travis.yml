@@ -2,8 +2,11 @@ language: go
 go:
 - '1.13'
 - '1.14'
-- 1.14.2
+- '1.14.2'
 - tip
+before_install:
+  - curl https://raw.githubusercontent.com/golang/dep/master/install.sh | sh
+  - dep ensure
 install:
 - go get -u -v github.com/tinkernels/doh-proxy
 before_deploy: make release
