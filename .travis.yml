@@ -24,4 +24,6 @@ deploy:
     - release/doh-proxy_windows-386.exe
   on:
     repo: tinkernels/doh-proxy
+    tags: true
+    go: "1.14.2"
   skip_cleanup: 'true'
