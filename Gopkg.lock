@@ -26,12 +26,13 @@
   version = "v1.1.29"
 
 [[projects]]
-  digest = "1:5907d0ddc26b262088060c6d0fbfd1d07088e71b476dc16d26780c8e335bf088"
+  branch = "master"
+  digest = "1:232ab927bfb8d97a0708d347473bf6835bcae3f4426d2ec9c66316b0e3542363"
   name = "github.com/sirupsen/logrus"
   packages = ["."]
   pruneopts = ""
-  revision = "d417be0fe654de640a82370515129985b407c7e3"
-  version = "v1.5.0"
+  revision = "48a1d8a9cb1bd54b40e20474d0080727f462e9e6"
+  source = "github.com/tinkernels/logrus"
 
 [[projects]]
   digest = "1:96146cca64370259f22d12d414ccd163132542653d2da23d1dbaaa3188299b65"

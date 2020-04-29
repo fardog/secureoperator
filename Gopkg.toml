@@ -26,7 +26,8 @@
 
 [[override]]
   name = "github.com/sirupsen/logrus"
-  version = "1.5.0"
+  branch = "master"
+  source = "github.com/tinkernels/logrus"
 
 [[override]]
   name = "github.com/antonfisher/nested-logrus-formatter"

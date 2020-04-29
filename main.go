@@ -153,6 +153,8 @@ specify multiple as:
 	log.SetLevel(level)
 	fmt.Println("log level: ", log.GetLevel())
 	log.SetReportCaller(true)
+	defaultTextFormat := logrus.TextFormatter{}
+	//reflect.ValueOf(defaultTextFormat).MethodByName
 	log.SetFormatter(&zt_formatter.ZtFormatter{
 		CallerPrettyfier: func(f *runtime.Frame) (string, string) {
 			filename := path.Base(f.File)
@@ -161,6 +163,8 @@ specify multiple as:
 		Formatter: nestedformatter.Formatter{
 			// HideKeys: true,
 			FieldsOrder: []string{"component", "category"},
+			NoColors: !defaultTextFormat.IsColored(),
+			NoFieldsColors: !defaultTextFormat.IsColored(),
 		},
 	})
 

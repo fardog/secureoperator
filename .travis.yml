@@ -9,21 +9,5 @@ before_install:
   - dep ensure
 install:
 - go get -u -v github.com/tinkernels/doh-proxy
-before_deploy: make release
-deploy:
-  provider: releases
-  api_key:
-    secure: WOCMhuzrdjk4d5MKJD+irpAnSI8yXu4xH+zed1nFBFvhvAyDlRjrx04URL4Uh+s3NHrsS1f1jmD8IJkoUgjLH6gOC+3kERodTDPgHUwUuKfOV1aHgIFK6KXF9dzJoFdewp9SwduFAZqvq+taTQ6TFnMF8KbmYNazhM2QZMZTMjYIDyf49xGgjvuN0rGaehm6wSyL63MZd0/RKIumof/Cikab79A0V7EusxLTIMXYdRmvS5X7U7KgIX9GfoI68t8LNW14VYnO93BZQV7gtNgQhr1xLp7dTnVjcHZBbDY8TKbHefDRBs6u17Wf+WdN2tz56DvtVoeA1+KspLHoUXL3H+lp91KudnMLus6RDit11TNcksiTfFQVXpoZmRNE5zX0bzx0OzXRg8gOyBBlgfC+eM8R1JxzGkl+PD45XQ7bQMAc6wiwwK4eHz1q8ACUOY8DRgbIsCuMh2Y3aCOL03DEiAlz6gIVLgYftAJfzjiUx+9TYOvZg2IGoNduqId1sf2LIiCN+CZrMWjO0r8GbZRiknyBYpPALYpD6dY44EbRPV8F6+7tA9KGy2lk8WHH9WAV9oGXG3FIj6yOHRO6JemWUZZDv6DxoO2kddWDp5WCWh2Yw1qLgOFVk2RPPfXF1erVR66hN91M8jHg91ZfMGW2B98oFnwfAVHd0JGQ4SGGa5k=
-  file:
-    - release/doh-proxy_linux-amd64
-    - release/doh-proxy_linux-386
-    - release/doh-proxy_linux-arm
-    - release/doh-proxy_macos-amd64
-    - release/doh-proxy_macos-386
-    - release/doh-proxy_windows-amd64.exe
-    - release/doh-proxy_windows-386.exe
-  on:
-    repo: tinkernels/doh-proxy
-    tags: true
-    go: "1.14.2"
-  skip_cleanup: 'true'
+- make release
+
