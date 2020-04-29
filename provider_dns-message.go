@@ -28,6 +28,17 @@ const (
 	MaxBytesOfDNSQuestionMessage = 512
 )
 
+// DMProvider is the Google DNS-over-HTTPS provider; it implements the
+// Provider interface, the abbreviation "DM" stands for dns-message.
+type DMProvider struct {
+	endpoint         string
+	url              *url.URL
+	host             string
+	opts             *DMProviderOptions
+	client           *http.Client
+	autoSubnetGetter func() (ip string)
+}
+
 // DMProviderOptions is a configuration object for optional DMProvider configuration
 type DMProviderOptions struct {
 	// EndpointIPs is a list of IPs to be used as the GDNS endpoint, avoiding
@@ -73,31 +84,75 @@ func NewDMProvider(endpoint string, opts *DMProviderOptions) (*DMProvider, error
 		return nil, err
 	}
 
-	prvdr := &DMProvider{
+	provider := &DMProvider{
 		endpoint: endpoint,
 		url:      u,
 		host:     u.Host,
 		opts:     opts,
 	}
+	err = configHTTPClient(provider)
+	if err != nil {
+		log.Errorf("config http client error: %v", err)
+		return nil, err
+	}
 
+	provider.autoSubnetGetter = func(secondsBeforeRetry int64) func() string {
+		timeLastTryGetSubnet := int64(0)
+		subnetLastUpdated := ""
+		renewSubnet := func(){
+			timeLastTryGetSubnet = time.Now().Unix()
+			log.Debugf("start obtain your external ip: %v", timeLastTryGetSubnet)
+			dnsS := provider.opts.DnsResolver
+			if dnsS == "" {
+				dnsS = "8.8.8.8"
+			}
+			ipExternal, err := ObtainCurrentExternalIP(dnsS)
+			if err == nil {
+				ipInt := net.ParseIP(ipExternal)
+				if ipInt.To4() == nil {
+					subnetLastUpdated = ipExternal + "/64"
+					log.Debugf("renew subnet: %v", subnetLastUpdated)
+				} else {
+					subnetLastUpdated = ipExternal + "/32"
+					log.Debugf("renew subnet: %v", subnetLastUpdated)
+				}
+			}
+		}
+		return func() string {
+			if time.Now().Unix() < timeLastTryGetSubnet + secondsBeforeRetry && time.Now().Unix() > timeLastTryGetSubnet{
+				log.Debugf("seconds left to obtain external ip again: %v",
+					timeLastTryGetSubnet + secondsBeforeRetry -time.Now().Unix())
+				return subnetLastUpdated
+			}else if subnetLastUpdated != ""{
+				go renewSubnet()
+				return subnetLastUpdated
+			}else{
+				renewSubnet()
+			}
+			return subnetLastUpdated
+		}
+	}(15*60) // renew external ip every 15min.
+
+	return provider, nil
+}
+
+func configHTTPClient(provider *DMProvider) error {
 	// Create TLS configuration with the certificate of the server
 	tlsConfig := &tls.Config{
-		ServerName: prvdr.url.Host,
+		ServerName: provider.url.Host,
 	}
 
 	// using custom CA certificate
-	if _, err := os.Stat(opts.CACertFilePath); err == nil {
-		caCert, err := ioutil.ReadFile(opts.CACertFilePath)
+	if _, err := os.Stat(provider.opts.CACertFilePath); err == nil {
+		caCert, err := ioutil.ReadFile(provider.opts.CACertFilePath)
 		if err != nil {
-			_ = fmt.Errorf("read custom CA certificate failed : %s", err)
+			log.Errorf("read custom CA certificate failed : %s", err)
+			return err
 		}
 		caCertPool := x509.NewCertPool()
 		caCertPool.AppendCertsFromPEM(caCert)
 		tlsConfig.RootCAs = caCertPool
-	} else {
-		_ = fmt.Errorf("specified ca cert don't exist")
 	}
-
 	dialer := &net.Dialer{
 		Timeout:   30 * time.Second,
 		KeepAlive: 30 * time.Second,
@@ -107,23 +162,23 @@ func NewDMProvider(endpoint string, opts *DMProviderOptions) (*DMProvider, error
 	// in cases where we request directly against an IP
 	tr := &http.Transport{
 		TLSClientConfig:   tlsConfig,
-		ForceAttemptHTTP2: opts.HTTP2,
+		ForceAttemptHTTP2: provider.opts.HTTP2,
 		DialContext: func(ctx context.Context, network string, addr string) (net.Conn, error) {
 			h, p, err := net.SplitHostPort(addr)
-			if len(opts.EndpointIPs) > 0 {
+			if len(provider.opts.EndpointIPs) > 0 {
 				if err == nil {
-					ip := opts.EndpointIPs[rand.Intn(len(opts.EndpointIPs))]
+					ip := provider.opts.EndpointIPs[rand.Intn(len(provider.opts.EndpointIPs))]
 					addr = net.JoinHostPort(ip.String(), p)
 					log.Info("endpoint ip address from specified: ", addr)
 				}
-			} else if opts.DnsResolver != "" {
+			} else if provider.opts.DnsResolver != "" {
 				var ipResolved []string
-				ipResolved = prvdr.resolveHostToIP(h + ".")
+				ipResolved = ResolveHostToIP(h+".", provider.opts.DnsResolver)
 
-				if ipResolved == nil{
+				if ipResolved == nil {
 					log.Info("Can't resolve endpoint from provided dns server")
 					return dialer.DialContext(ctx, network, addr)
-				}else if len(ipResolved) == 0 {
+				} else if len(ipResolved) == 0 {
 					log.Info("Resolve answder of endpoint is empty from provided dns server")
 					return dialer.DialContext(ctx, network, addr)
 				}
@@ -135,155 +190,23 @@ func NewDMProvider(endpoint string, opts *DMProviderOptions) (*DMProvider, error
 			return dialer.DialContext(ctx, network, addr)
 		},
 	}
-	prvdr.client = &http.Client{Transport: tr}
-
-	return prvdr, nil
+	provider.client = &http.Client{Transport: tr}
+	return nil
 }
 
-func (prvdr *DMProvider) resolveHostToIP(name string) []string {
-	var ips []string
-	_, _, err := net.SplitHostPort(prvdr.opts.DnsResolver)
-	if err != nil {
-		log.Error("Dns resolver can't be recognized: ", err)
-		return ips
+func (provider DMProvider) Query(msg *dns.Msg) (*dns.Msg, error) {
+
+	if provider.opts.Alternative {
+		return provider.urlParamsQuery(msg)
 	}
 
-	mA := new(dns.Msg)
-	mA.SetQuestion(name, dns.TypeA)
-	msgC := make(chan *dns.Msg)
-	triggerFinish := make(chan bool)
-	defer close(msgC)
-	defer close(triggerFinish)
-
-	go func(msgA <-chan *dns.Msg, ips *[]string, finish chan bool) {
-		client := &dns.Client{}
-		r, _, err := client.Exchange(<-msgA, prvdr.opts.DnsResolver)
-		if err != nil {
-			log.Error("can't resolve endpoint host with provided dns resolver", err)
-		}
-
-		for _, ip := range r.Answer {
-			ipv4 := ip.(*dns.A)
-			if ipv4 != nil && ipv4.A != nil {
-				*ips = append(*ips, ipv4.A.String())
-			}
-		}
-
-		finish <- true
-
-	}(msgC, &ips, triggerFinish)
-
-	msgC <- mA
-	<-triggerFinish
-
-	return ips
+	return provider.dnsMessageQuery(msg)
 }
 
-// DMProvider is the Google DNS-over-HTTPS provider; it implements the
-// Provider interface, the abbreviation "DM" stands for dns-message.
-type DMProvider struct {
-	endpoint string
-	url      *url.URL
-	host     string
-	opts     *DMProviderOptions
-	client   *http.Client
-}
-
-func (prvdr DMProvider) parameterizedRequest(msg *dns.Msg) (*http.Request, error) {
-	u := *prvdr.url
-
-	httpreq, err := http.NewRequest(http.MethodGet, u.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	// set headers if provided; we don't merge these for now, as we don't set
-	// any headers by default
-	if prvdr.opts.Headers != nil {
-		httpreq.Header = prvdr.opts.Headers
-	}
-
-	qry := httpreq.URL.Query()
-	dnsType := fmt.Sprintf("%v", msg.Question[0].Qtype)
-
-	l := len([]byte(msg.Question[0].Name))
-	if l > MaxBytesOfDNSName {
-		return nil, fmt.Errorf("name length of %v exceeds DNS name max length", l)
-	}
-
-	qry.Add("name", msg.Question[0].Name)
-	qry.Add("type", dnsType)
-
-	// add additional query parameters
-	if prvdr.opts.QueryParameters != nil {
-		for k, vs := range prvdr.opts.QueryParameters {
-			for _, v := range vs {
-				qry.Add(k, v)
-			}
-		}
-	}
-
-	ednsSubnet := ""
-	if prvdr.opts.EDNSSubnet == "no" {
-		log.Debug("will not use EDNSSubnet.")
-	} else if prvdr.opts.EDNSSubnet == "auto" {
-		log.Debug("will use your external IP as EDNSSubnet.")
-	} else {
-		_, _, err := net.ParseCIDR(prvdr.opts.EDNSSubnet)
-		if err != nil {
-			log.Debugf("specified subnet is not OK: %v", prvdr.opts.EDNSSubnet)
-		}
-		log.Debugf("will use EDNSSubnet you specified: %v", prvdr.opts.EDNSSubnet)
-		ednsSubnet = prvdr.opts.EDNSSubnet
-	}
-
-	if ednsSubnet != "" {
-		qry.Add("edns_client_subnet", ednsSubnet)
-	}
-
-	randomPadding := strconv.FormatInt(time.Now().UnixNano(), 10)
-	qry.Add(PaddingParameter, randomPadding)
-
-	qry.Add("ct", ContentType)
-	httpreq.URL.RawQuery = qry.Encode()
-
-	return httpreq, nil
-}
-
-func (prvdr DMProvider) doHTTPRequest(cReq <-chan *http.Request, cRsp chan *http.Response) {
-	httpresp, err := prvdr.client.Do(<-cReq)
-
-	if err != nil {
-		cRsp <- nil
-		log.Errorln("HttpRequest Error", err)
-	} else {
-		cRsp <- httpresp
-	}
-}
-
-func (prvdr DMProvider) fireDoDoHRequest(req *http.Request) (*http.Response, error) {
-	cReq := make(chan *http.Request)
-	cRsp := make(chan *http.Response)
-
-	defer close(cReq)
-	defer close(cRsp)
-
-	go prvdr.doHTTPRequest(cReq, cRsp)
-	cReq <- req
-
-	httpresp := <-cRsp
-
-	if httpresp == nil {
-		return nil, errors.New("HttpRequest Error occured")
-	} else {
-		return httpresp, nil
-	}
-}
-
-// UrlParamsQuery sends a DNS question to Google, and returns the response
-func (prvdr DMProvider) UrlParamsQuery(msg *dns.Msg) (*dns.Msg, error) {
+// urlParamsQuery sends a DNS question to Google, and returns the response
+func (provider DMProvider) urlParamsQuery(msg *dns.Msg) (*dns.Msg, error) {
 	// Return fake answer (SOA or empty) if NoAAAA option is on.
-	if prvdr.opts.NoAAAA {
+	if provider.opts.NoAAAA {
 		for _, q := range msg.Question {
 			if q.Qtype == dns.TypeAAAA {
 				q.Qtype = dns.TypeSOA
@@ -294,12 +217,12 @@ func (prvdr DMProvider) UrlParamsQuery(msg *dns.Msg) (*dns.Msg, error) {
 
 	log.Debugf("Dns Question Msg: \n%v", msg)
 
-	httpreq, err := prvdr.parameterizedRequest(msg)
+	httpreq, err := provider.parameterizedRequest(msg)
 	if err != nil {
 		return nil, err
 	}
 
-	httpresp, err := prvdr.fireDoDoHRequest(httpreq)
+	httpresp, err := provider.fireDoHRequest(httpreq)
 	if err != nil {
 		return nil, err
 	}
@@ -323,16 +246,98 @@ func (prvdr DMProvider) UrlParamsQuery(msg *dns.Msg) (*dns.Msg, error) {
 	return msg, nil
 }
 
-func (prvdr DMProvider) DnsMessageQuery(msg *dns.Msg) (*dns.Msg, error) {
+func (provider DMProvider) dnsMessageQuery(msg *dns.Msg) (*dns.Msg, error) {
 
 	return msg, nil
 }
 
-func (prvdr DMProvider) Query(msg *dns.Msg) (*dns.Msg, error) {
+func (provider DMProvider) parameterizedRequest(msg *dns.Msg) (*http.Request, error) {
+	u := *provider.url
 
-	if prvdr.opts.Alternative {
-		return prvdr.UrlParamsQuery(msg)
+	httpreq, err := http.NewRequest(http.MethodGet, u.String(), nil)
+	if err != nil {
+		return nil, err
 	}
 
-	return prvdr.DnsMessageQuery(msg)
+	// set headers if provided; we don't merge these for now, as we don't set
+	// any headers by default
+	if provider.opts.Headers != nil {
+		httpreq.Header = provider.opts.Headers
+	}
+
+	qry := httpreq.URL.Query()
+	dnsType := fmt.Sprintf("%v", msg.Question[0].Qtype)
+
+	l := len([]byte(msg.Question[0].Name))
+	if l > MaxBytesOfDNSName {
+		return nil, fmt.Errorf("name length of %v exceeds DNS name max length", l)
+	}
+
+	qry.Add("name", msg.Question[0].Name)
+	qry.Add("type", dnsType)
+
+	// add additional query parameters
+	if provider.opts.QueryParameters != nil {
+		for k, vs := range provider.opts.QueryParameters {
+			for _, v := range vs {
+				qry.Add(k, v)
+			}
+		}
+	}
+
+	ednsSubnet := ""
+	if provider.opts.EDNSSubnet == "no" {
+		log.Debug("will not use EDNSSubnet.")
+	} else if provider.opts.EDNSSubnet == "auto" {
+		ednsSubnet = provider.autoSubnetGetter()
+	} else {
+		_, _, err := net.ParseCIDR(provider.opts.EDNSSubnet)
+		if err != nil {
+			log.Debugf("specified subnet is not OK: %v", provider.opts.EDNSSubnet)
+		}
+		log.Debugf("will use EDNSSubnet you specified: %v", provider.opts.EDNSSubnet)
+		ednsSubnet = provider.opts.EDNSSubnet
+	}
+
+	if ednsSubnet != "" {
+		qry.Add("edns_client_subnet", ednsSubnet)
+	}
+
+	randomPadding := strconv.FormatInt(time.Now().UnixNano(), 10)
+	qry.Add(PaddingParameter, randomPadding)
+
+	qry.Add("ct", ContentType)
+	httpreq.URL.RawQuery = qry.Encode()
+
+	return httpreq, nil
+}
+
+func (provider DMProvider) doHTTPRequest(cReq <-chan *http.Request, cRsp chan *http.Response) {
+	httpresp, err := provider.client.Do(<-cReq)
+
+	if err != nil {
+		cRsp <- nil
+		log.Errorln("HttpRequest Error", err)
+	} else {
+		cRsp <- httpresp
+	}
+}
+
+func (provider DMProvider) fireDoHRequest(req *http.Request) (*http.Response, error) {
+	cReq := make(chan *http.Request)
+	cRsp := make(chan *http.Response)
+
+	defer close(cReq)
+	defer close(cRsp)
+
+	go provider.doHTTPRequest(cReq, cRsp)
+	cReq <- req
+
+	httpresp := <-cRsp
+
+	if httpresp == nil {
+		return nil, errors.New("HttpRequest Error occured")
+	} else {
+		return httpresp, nil
+	}
 }

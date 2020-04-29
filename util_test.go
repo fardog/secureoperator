@@ -167,3 +167,12 @@ func TestIfLocalAddr(t *testing.T){
 		}
 	}
 }
+
+func TestObtainExternalIP(t *testing.T){
+	t.Logf("external ip is: %v", ObtainCurrentExternalIP("114.114.114.114"))
+}
+
+func TestResolve(t *testing.T){
+	t.Logf("using %v resolve domain to ip: %v -> %v", "8.8.8.8",
+		"google.com", ResolveHostToIP("google.com.", "8.8.8.8"))
+}

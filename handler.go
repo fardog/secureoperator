@@ -18,10 +18,11 @@ type Handler struct {
 
 // NewHandler creates a new Handler
 func NewHandler(provider Provider, options *HandlerOptions) *Handler {
-	handler := new(Handler)
-	handler.options = options
-	handler.provider = provider
-	handler.hostsFileProvider = NewHostsFileProvider()
+	handler := &Handler{
+		options: options,
+		provider: provider,
+		hostsFileProvider: NewHostsFileProvider(),
+	}
 	return handler
 }
 
