@@ -11,7 +11,6 @@ release:
 	GOOS=linux GOARCH=386 go build $(build_flags) -o release/doh-proxy_linux-386 $(package)
 	GOOS=linux GOARCH=arm go build $(build_flags) -o release/doh-proxy_linux-arm $(package)
 	GOOS=darwin GOARCH=amd64 go build $(build_flags) -o release/doh-proxy_macos-amd64 $(package)
-	GOOS=darwin GOARCH=386 go build $(build_flags) -o release/doh-proxy_macos-386 $(package)
 	GOOS=windows GOARCH=amd64 go build $(build_flags) -o release/doh-proxy_windows-amd64.exe $(package)
 	GOOS=windows GOARCH=386 go build $(build_flags) -o release/doh-proxy_windows-386.exe $(package)
 
