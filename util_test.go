@@ -169,7 +169,7 @@ func TestIfLocalAddr(t *testing.T){
 }
 
 func TestObtainExternalIP(t *testing.T){
-	ip,_ :=  ObtainCurrentExternalIP("114.114.114.114")
+	ip,_ :=  ObtainCurrentExternalIP("8.8.8.8")
 
 	t.Logf("external ip is: %v", ip)
 }

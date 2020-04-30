@@ -120,20 +120,28 @@ func ResolveHostToIP(name string, resolver string) []string {
 
 	go func() {
 		var ipsResolved []string
-		client := &dns.Client{}
-		r, _, err := client.Exchange(mA, resolver)
-		if err != nil {
-			log.Error("can't resolve endpoint host with provided dns resolver:", err)
-		}
-
-		for _, ip := range r.Answer {
-			ipv4 := ip.(*dns.A)
-			if ipv4 != nil && ipv4.A != nil {
-				ipsResolved = append(ipsResolved, ipv4.A.String())
+		for _, dnsNet := range []string{"tcp","udp"}{
+			client := &dns.Client{Net: dnsNet}
+			r, _, err := client.Exchange(mA, resolver)
+			if err != nil {
+				log.Errorf("can't resolve endpoint host with provided dns resolver over %v: %v", dnsNet, err)
+				continue
+			}else{
+				if r.Answer == nil {
+					ips <- nil
+					return
+				}
+				for _, ip := range r.Answer {
+					ipv4 := ip.(*dns.A)
+					if ipv4 != nil && ipv4.A != nil {
+						ipsResolved = append(ipsResolved, ipv4.A.String())
+					}
+				}
+				log.Infof("ips resolved by dns: %v -> %v",name, ipsResolved)
+				ips <- ipsResolved
+				return
 			}
 		}
-		log.Infof("ips resolved by dns: %v -> %v",name, ipsResolved)
-		ips <- ipsResolved
 	}()
 	return <- ips
 }
