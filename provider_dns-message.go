@@ -96,42 +96,8 @@ func NewDMProvider(endpoint string, opts *DMProviderOptions) (*DMProvider, error
 		return nil, err
 	}
 
-	provider.autoSubnetGetter = func(secondsBeforeRetry int64) func() string {
-		timeLastTryGetSubnet := int64(0)
-		subnetLastUpdated := ""
-		renewSubnet := func(){
-			timeLastTryGetSubnet = time.Now().Unix()
-			log.Debugf("start obtain your external ip: %v", timeLastTryGetSubnet)
-			dnsS := provider.opts.DnsResolver
-			if dnsS == "" {
-				dnsS = "8.8.8.8"
-			}
-			ipExternal, err := ObtainCurrentExternalIP(dnsS)
-			if err == nil {
-				ipInt := net.ParseIP(ipExternal)
-				if ipInt.To4() == nil {
-					subnetLastUpdated = ipExternal + "/64"
-					log.Debugf("renew subnet: %v", subnetLastUpdated)
-				} else {
-					subnetLastUpdated = ipExternal + "/32"
-					log.Debugf("renew subnet: %v", subnetLastUpdated)
-				}
-			}
-		}
-		return func() string {
-			if time.Now().Unix() < timeLastTryGetSubnet + secondsBeforeRetry && time.Now().Unix() > timeLastTryGetSubnet{
-				log.Debugf("seconds left to obtain external ip again: %v",
-					timeLastTryGetSubnet + secondsBeforeRetry -time.Now().Unix())
-				return subnetLastUpdated
-			}else if subnetLastUpdated != ""{
-				go renewSubnet()
-				return subnetLastUpdated
-			}else{
-				renewSubnet()
-			}
-			return subnetLastUpdated
-		}
-	}(15*60) // renew external ip every 15min.
+	// renew external ip every 15min.
+	provider.autoSubnetGetter = currentSubnetClosure(provider.opts.DnsResolver, 15*60)
 
 	return provider, nil
 }
@@ -192,6 +158,44 @@ func configHTTPClient(provider *DMProvider) error {
 	}
 	provider.client = &http.Client{Transport: tr}
 	return nil
+}
+
+func currentSubnetClosure(dnsResolver string, secondsBeforeRetry int64) (getter func() string) {
+	timeLastTryGetSubnet := int64(0)
+	subnetLastUpdated := ""
+	renewSubnet := func() {
+		timeLastTryGetSubnet = time.Now().Unix()
+		log.Debugf("start obtain your external ip: %v", timeLastTryGetSubnet)
+		dnsS := dnsResolver
+		if dnsS == "" {
+			dnsS = "8.8.8.8"
+		}
+		ipExternal, err := ObtainCurrentExternalIP(dnsS)
+		if err == nil {
+			ipInt := net.ParseIP(ipExternal)
+			if ipInt.To4() == nil {
+				subnetLastUpdated = ipExternal + "/64"
+				log.Debugf("renew subnet: %v", subnetLastUpdated)
+			} else {
+				subnetLastUpdated = ipExternal + "/32"
+				log.Debugf("renew subnet: %v", subnetLastUpdated)
+			}
+		}
+	}
+	return func() string {
+		if time.Now().Unix() < timeLastTryGetSubnet+secondsBeforeRetry &&
+			time.Now().Unix() > timeLastTryGetSubnet {
+			log.Debugf("seconds left to obtain external ip again: %v",
+				timeLastTryGetSubnet+secondsBeforeRetry-time.Now().Unix())
+			return subnetLastUpdated
+		} else if subnetLastUpdated != "" {
+			go renewSubnet()
+			return subnetLastUpdated
+		} else {
+			renewSubnet()
+		}
+		return subnetLastUpdated
+	}
 }
 
 func (provider DMProvider) Query(msg *dns.Msg) (*dns.Msg, error) {
