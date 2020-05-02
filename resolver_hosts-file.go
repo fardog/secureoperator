@@ -92,7 +92,7 @@ func (hosts *HostsFileResolver) LookupStaticHost(host string) []string {
 	defer hosts.Unlock()
 	hosts.readHosts()
 	if len(hosts.byName) != 0 {
-		// TODO(jbd,bradfitz): avoid this alloc if host is already all lowercase?
+		// avoid this alloc if host is already all lowercase?
 		// or linear scan the byName map if it's small enough?
 		lowerHost := []byte(host)
 		lowerASCIIBytes(lowerHost)

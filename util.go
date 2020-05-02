@@ -1,16 +1,10 @@
 package main
 
 import (
-	"context"
-	"encoding/json"
-	"errors"
 	"fmt"
 	"github.com/miekg/dns"
-	"github.com/sirupsen/logrus"
-	"io/ioutil"
 	"math/rand"
 	"net"
-	"net/http"
 	"strings"
 	"time"
 )
@@ -72,16 +66,6 @@ func (k KeyValue) String() string {
 	return strings.Join(s, " ")
 }
 
-func logDebug(args ...interface{}) {
-	lvl, err := logrus.ParseLevel(*logLevelFlag)
-	if err != nil {
-		return
-	}
-	if log.IsLevelEnabled(lvl) {
-		log.Debug(args...)
-	}
-}
-
 func IsLocalListen(addr string) bool {
 	localNets := []string{
 		"127.0.0.1",
@@ -102,12 +86,77 @@ func IsLocalListen(addr string) bool {
 	return false
 }
 
-func ResolveHostToIP(name string, resolver string) []string {
-	ips := make(chan []string)
+func ObtainEDN0Subnet(msg *dns.Msg) (edns0Subnet dns.EDNS0_SUBNET) {
+	var edns0 = msg.IsEdns0()
+	if edns0 != nil {
+		for _, o := range edns0.Option {
+			switch o.(type) {
+			case *dns.EDNS0_SUBNET:
+				subnet := o.(*dns.EDNS0_SUBNET)
+				return *subnet
+			}
+		}
+	}
+	return dns.EDNS0_SUBNET{}
+}
+
+func ReplaceEDNS0Subnet(msg *dns.Msg, subnet dns.EDNS0_SUBNET) {
+	var edns0 = msg.IsEdns0()
+	if edns0 != nil {
+		if edns0.Option != nil && len(edns0.Option) > 0 {
+			for i, o := range edns0.Option {
+				switch o.(type) {
+				case *dns.EDNS0_SUBNET:
+					edns0.Option[i] = &subnet
+					return
+				}
+			}
+			edns0.Option = append([]dns.EDNS0{&subnet}, edns0.Option...)
+		} else {
+			edns0.Option = append([]dns.EDNS0{&subnet}, edns0.Option...)
+		}
+	} else if &subnet != nil {
+		opt := &dns.OPT{Hdr: dns.RR_Header{Name: ".", Rrtype: dns.TypeOPT},
+			Option: []dns.EDNS0{&subnet}}
+		msg.Extra = append(msg.Extra, opt)
+	}
+}
+
+func GetMinTTLFromDnsMsg(msg *dns.Msg) (minTTL uint32) {
+	// cache will expire even ttl is greater than 3600 (1hr)
+	minTTL = uint32(3600)
+	if len(msg.Answer) == 0 && len(msg.Ns) == 0 {
+		minTTL = 60
+	} else {
+		for _, rs :=
+		range [][]dns.RR{msg.Answer, msg.Ns} {
+			for _, r := range rs {
+				ttl := r.Header().Ttl
+				if ttl < minTTL {
+					minTTL = ttl
+				}
+			}
+		}
+	}
+	if minTTL < 0 {
+		return 0
+	}
+	return minTTL
+}
+
+func InsertIntoSlice(to []interface{}, from interface{}, inex int) []interface{} {
+	return append(to[:inex], append([]interface{}{from}, to[inex:]...)...)
+}
+
+// resolve domain name to ips (ipv4 + ipv6), fixed 60s ttl
+func ResolveHostToIP(name string, resolver string) (closure func() []string) {
+	var ips []string
 	ipResolver := net.ParseIP(resolver)
-	if ipResolver != nil{
+	const ttl = int64(60)
+	timeExpire := int64(0)
+	if ipResolver != nil {
 		resolver = net.JoinHostPort(ipResolver.String(), "53")
-	}else{
+	} else {
 		_, _, err := net.SplitHostPort(resolver)
 		if err != nil {
 			log.Error("Dns resolver can't be recognized: ", err)
@@ -115,119 +164,61 @@ func ResolveHostToIP(name string, resolver string) []string {
 		}
 	}
 
-	mA := new(dns.Msg)
-	mA.SetQuestion(name, dns.TypeA)
-
-	go func() {
+	resolve := func() {
+		mA4 := new(dns.Msg)
+		mA4.SetQuestion(dns.CanonicalName(name), dns.TypeA)
+		mA6 := new(dns.Msg)
+		mA6.SetQuestion(name, dns.TypeAAAA)
 		var ipsResolved []string
-		for _, dnsNet := range []string{"tcp","udp"}{
+		for _, dnsNet := range []string{"tcp", "udp"} {
 			client := &dns.Client{Net: dnsNet}
-			r, _, err := client.Exchange(mA, resolver)
+			// ipv4
+			r4, _, err := client.Exchange(mA4.Copy(), resolver)
 			if err != nil {
 				log.Errorf("can't resolve endpoint host with provided dns resolver over %v: %v", dnsNet, err)
 				continue
-			}else{
-				if r.Answer == nil {
-					ips <- nil
-					return
-				}
-				for _, ip := range r.Answer {
-					ipv4 := ip.(*dns.A)
-					if ipv4 != nil && ipv4.A != nil {
-						ipsResolved = append(ipsResolved, ipv4.A.String())
+			} else {
+				if r4.Answer != nil {
+					for _, ip := range r4.Answer {
+						switch ip.(type) {
+						case *dns.A:
+							ipv := ip.(*dns.A)
+							if ipv != nil {
+								ipsResolved = append(ipsResolved, ipv.A.String())
+							}
+						}
 					}
 				}
-				log.Infof("ips resolved by dns: %v -> %v",name, ipsResolved)
-				ips <- ipsResolved
-				return
+
+			}
+			// ipv6
+			r6, _, err := client.Exchange(mA6.Copy(), resolver)
+			if err != nil {
+				log.Errorf("can't resolve endpoint host with provided dns resolver over %v: %v", dnsNet, err)
+				continue
+			} else {
+				if r6.Answer != nil {
+					for _, ip := range r6.Answer {
+						switch ip.(type) {
+						case *dns.AAAA:
+							ipv := ip.(*dns.AAAA)
+							if ipv != nil {
+								ipsResolved = append(ipsResolved, ipv.AAAA.String())
+							}
+						}
+					}
+				}
 			}
 		}
-	}()
-	return <- ips
+		ips = ipsResolved
+		timeExpire = time.Now().Unix() + ttl
+	}
+	return func()[]string{
+		if len(ips) == 0{
+			resolve()
+		}else if time.Now().Unix() > timeExpire {
+			go resolve()
+		}
+		return ips
+	}
 }
-
-func ObtainCurrentExternalIP(dnsResolver string) (string,error){
-	ip := ""
-	type IPRespModel struct {
-		Address string `json:"address"`
-		Ip      string `json:"ip"`
-	}
-
-	apiToTry := []string{
-		"https://wq.apnic.net/ip",
-		"https://accountws.arin.net/public/seam/resource/rest/myip",
-		"https://rdap.lacnic.net/rdap/info/myip",
-	}
-
-	dialer := &net.Dialer{
-		Timeout:   30 * time.Second,
-		KeepAlive: 30 * time.Second,
-	}
-
-	// custom transport for supporting servernames which may not match the url,
-	// in cases where we request directly against an IP
-	tr := &http.Transport{
-		DialContext: func(ctx context.Context, network string, addr string) (net.Conn, error) {
-			h, p, _ := net.SplitHostPort(addr)
-			var ipResolved []string
-			ipResolved = ResolveHostToIP(h + ".", dnsResolver)
-
-			if ipResolved == nil{
-				log.Errorf("Can't resolve endpoint %v from provided dns server %v", h, dnsResolver)
-				return dialer.DialContext(ctx, network, addr)
-			}else if len(ipResolved) == 0 {
-				log.Debugf("Resolve answder of endpoint %v is empty from provided dns server %v",
-					h, dnsResolver)
-				return dialer.DialContext(ctx, network, addr)
-			}
-			ip := ipResolved[rand.Intn(len(ipResolved))]
-			addr = net.JoinHostPort(ip, p)
-			log.Info("endpoint ip address from dns-resolver: ", addr)
-
-			return dialer.DialContext(ctx, network, addr)
-		},
-	}
-
-	client := &http.Client{Transport: tr}
-
-	for _, uri := range apiToTry{
-		log.Debugf("start obtain external ip from: %v", uri)
-		httpReq, err := http.NewRequest(http.MethodGet, uri, nil)
-		if err != nil {
-			log.Errorf("retrieve external ip error: %v", err)
-			continue
-		}
-		httpResp, err := client.Do(httpReq)
-		if err != nil{
-			log.Errorf("http api call failed: %v", err)
-			continue
-		}
-		ipResp := new(IPRespModel)
-		httpRespBytes, err:= ioutil.ReadAll(httpResp.Body)
-		if err != nil {
-			log.Errorf("http api call result read error: %v, %v",httpRespBytes, err)
-		}
-		err = json.Unmarshal(httpRespBytes, &ipResp)
-		if err != nil{
-			log.Errorf("retrieve external ip error: %v", err)
-			continue
-		}
-		if ipResp.Ip != ""{
-			ip = ipResp.Ip
-			log.Errorf("API result of obtain external ip: %v", ipResp)
-		}
-		if ipResp.Address != ""{
-			ip = ipResp.Address
-			log.Infof("API result of obtain external ip: %v", ipResp)
-		}
-		if ip != "" {
-			break
-		}
-	}
-
-	if ip == ""{
-		return "", errors.New("can't obtain your external ip address")
-	}
-	return ip, nil
-}
-

@@ -28,11 +28,13 @@ func NewHostsFileProvider() *HostsFileProvider {
 }
 
 func (provider *HostsFileProvider) Query(msg *dns.Msg) (*dns.Msg, error) {
+	// sounds ridiculous, some program on macOS resolve domain with port,e.g. localhost:1080.
+	// so, remove port in dns question and pin the localhost resolve when using hosts file resolver.
 	localhostName := "localhost"
 	localhostIP4 := "127.0.0.1"
 	localhostIP16 := "::1"
 
-	qName := msg.Question[0].Name
+	qName := dns.CanonicalName(msg.Question[0].Name)
 	qType := msg.Question[0].Qtype
 
 	host, _, _ := net.SplitHostPort(strings.TrimSuffix(qName, "."))
@@ -65,7 +67,7 @@ func (provider *HostsFileProvider) Query(msg *dns.Msg) (*dns.Msg, error) {
 		rMsg.Answer = make([]dns.RR, 1)
 		rMsg.Answer[0] = genAnswerFromIP(qType, qName, localhostIP16)
 	} else {
-		// remove \ from host so that host will keep orginal
+		// remove \ from host so that host will keep as original.
 		ips := provider.resolver.LookupStaticHost(strings.ReplaceAll(host,"\\",""))
 		rMsg.Answer = make([]dns.RR, len(ips))
 		for i, ip := range ips {

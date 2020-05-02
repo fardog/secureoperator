@@ -154,6 +154,7 @@ specify multiple as:
 	fmt.Println("log level: ", log.GetLevel())
 	log.SetReportCaller(true)
 	defaultTextFormat := logrus.TextFormatter{}
+	_, _ = defaultTextFormat.Format(&logrus.Entry{Logger: log})
 	//reflect.ValueOf(defaultTextFormat).MethodByName
 	log.SetFormatter(&zt_formatter.ZtFormatter{
 		CallerPrettyfier: func(f *runtime.Frame) (string, string) {

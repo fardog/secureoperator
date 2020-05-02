@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/miekg/dns"
@@ -37,6 +38,7 @@ type DMProvider struct {
 	opts             *DMProviderOptions
 	client           *http.Client
 	autoSubnetGetter func() (ip string)
+	ipResolvers      map[string](func() []string)
 }
 
 // DMProviderOptions is a configuration object for optional DMProvider configuration
@@ -89,6 +91,7 @@ func NewDMProvider(endpoint string, opts *DMProviderOptions) (*DMProvider, error
 		url:      u,
 		host:     u.Host,
 		opts:     opts,
+
 	}
 	err = configHTTPClient(provider)
 	if err != nil {
@@ -97,7 +100,9 @@ func NewDMProvider(endpoint string, opts *DMProviderOptions) (*DMProvider, error
 	}
 
 	// renew external ip every 15min.
-	provider.autoSubnetGetter = currentSubnetClosure(provider.opts.DnsResolver, 15*60)
+	provider.autoSubnetGetter = provider.currentSubnetClosure(provider.opts.DnsResolver, 15*60)
+
+	provider.ipResolvers = make(map[string](func() []string))
 
 	return provider, nil
 }
@@ -119,14 +124,19 @@ func configHTTPClient(provider *DMProvider) error {
 		caCertPool.AppendCertsFromPEM(caCert)
 		tlsConfig.RootCAs = caCertPool
 	}
+
+	keepAliveTimeout := 300 * time.Second
+	timeout := 15 * time.Second
+
 	dialer := &net.Dialer{
-		Timeout:   30 * time.Second,
-		KeepAlive: 30 * time.Second,
+		Timeout:   timeout,
+		KeepAlive: keepAliveTimeout,
 	}
 
 	// custom transport for supporting servernames which may not match the url,
 	// in cases where we request directly against an IP
 	tr := &http.Transport{
+		Proxy:             nil,
 		TLSClientConfig:   tlsConfig,
 		ForceAttemptHTTP2: provider.opts.HTTP2,
 		DialContext: func(ctx context.Context, network string, addr string) (net.Conn, error) {
@@ -139,8 +149,15 @@ func configHTTPClient(provider *DMProvider) error {
 				}
 			} else if provider.opts.DnsResolver != "" {
 				var ipResolved []string
-				ipResolved = ResolveHostToIP(h+".", provider.opts.DnsResolver)
-
+				if provider.ipResolvers[h] == nil {
+					closure := ResolveHostToIP(dns.CanonicalName(h), provider.opts.DnsResolver)
+					if closure != nil{
+						provider.ipResolvers[h] = closure
+					}else{
+						return dialer.DialContext(ctx, network, addr)
+					}
+				}
+				ipResolved = provider.ipResolvers[h]()
 				if ipResolved == nil {
 					log.Info("Can't resolve endpoint from provided dns server")
 					return dialer.DialContext(ctx, network, addr)
@@ -156,21 +173,22 @@ func configHTTPClient(provider *DMProvider) error {
 			return dialer.DialContext(ctx, network, addr)
 		},
 	}
-	provider.client = &http.Client{Transport: tr}
+	provider.client = &http.Client{Transport: tr, Timeout: timeout}
 	return nil
 }
 
-func currentSubnetClosure(dnsResolver string, secondsBeforeRetry int64) (getter func() string) {
-	timeLastTryGetSubnet := int64(0)
+func (provider *DMProvider)currentSubnetClosure(dnsResolver string, secondsBeforeRetry int64) (getter func() string) {
+	expireTime := int64(0)
 	subnetLastUpdated := ""
+	updating := false
 	renewSubnet := func() {
-		timeLastTryGetSubnet = time.Now().Unix()
-		log.Debugf("start obtain your external ip: %v", timeLastTryGetSubnet)
+		updating = true
+		log.Debugf("start obtain your external ip: %v", time.Now().Unix())
 		dnsS := dnsResolver
 		if dnsS == "" {
 			dnsS = "8.8.8.8"
 		}
-		ipExternal, err := ObtainCurrentExternalIP(dnsS)
+		ipExternal, err := provider.ObtainCurrentExternalIP(dnsS)
 		if err == nil {
 			ipInt := net.ParseIP(ipExternal)
 			if ipInt.To4() == nil {
@@ -181,21 +199,126 @@ func currentSubnetClosure(dnsResolver string, secondsBeforeRetry int64) (getter 
 				log.Debugf("renew subnet: %v", subnetLastUpdated)
 			}
 		}
+		expireTime = time.Now().Unix() + 15 * 60
+		updating = false
 	}
 	return func() string {
-		if time.Now().Unix() < timeLastTryGetSubnet+secondsBeforeRetry &&
-			time.Now().Unix() > timeLastTryGetSubnet {
+		if time.Now().Unix() < expireTime {
 			log.Debugf("seconds left to obtain external ip again: %v",
-				timeLastTryGetSubnet+secondsBeforeRetry-time.Now().Unix())
+				time.Now().Unix() - expireTime)
 			return subnetLastUpdated
 		} else if subnetLastUpdated != "" {
-			go renewSubnet()
+			if !updating {
+				go renewSubnet()
+			}
 			return subnetLastUpdated
 		} else {
 			renewSubnet()
 		}
 		return subnetLastUpdated
 	}
+}
+
+func (provider *DMProvider)ObtainCurrentExternalIP(dnsResolver string) (string, error) {
+	ip := ""
+	type IPRespModel struct {
+		Address string `json:"address"`
+		Ip      string `json:"ip"`
+	}
+
+	apiToTry := []string{
+		"https://wq.apnic.net/ip",
+		"https://accountws.arin.net/public/seam/resource/rest/myip",
+		"https://rdap.lacnic.net/rdap/info/myip",
+	}
+
+	keepAliveTimeout:= 300 * time.Second
+	timeout:= 15 * time.Second
+
+	dialer := &net.Dialer{
+		Timeout:   timeout,
+		KeepAlive: keepAliveTimeout,
+	}
+
+	// custom transport for supporting servernames which may not match the url,
+	// in cases where we request directly against an IP
+	tr := &http.Transport{
+		Proxy: nil,
+		DialContext: func(ctx context.Context, network string, addr string) (net.Conn, error) {
+			h, p, _ := net.SplitHostPort(addr)
+			var ipResolved []string
+			if provider.ipResolvers[h] == nil {
+				closure := ResolveHostToIP(dns.CanonicalName(h), dnsResolver)
+				if closure != nil{
+					provider.ipResolvers[h] = closure
+				}else{
+					return dialer.DialContext(ctx, network, addr)
+				}
+			}
+			ipResolved = provider.ipResolvers[h]()
+
+			if ipResolved == nil {
+				log.Errorf("Can't resolve endpoint %v from provided dns server %v", h, dnsResolver)
+				return dialer.DialContext(ctx, network, addr)
+			} else if len(ipResolved) == 0 {
+				log.Debugf("Resolve answder of endpoint %v is empty from provided dns server %v",
+					h, dnsResolver)
+				return dialer.DialContext(ctx, network, addr)
+			}
+			ip := ipResolved[rand.Intn(len(ipResolved))]
+			addr = net.JoinHostPort(ip, p)
+			log.Info("endpoint ip address from dns-resolver: ", addr)
+
+			return dialer.DialContext(ctx, network, addr)
+		},
+	}
+
+	client := &http.Client{Transport: tr, Timeout: timeout}
+
+	for _, uri := range apiToTry {
+		log.Debugf("start obtain external ip from: %v", uri)
+		httpReq, err := http.NewRequest(http.MethodGet, uri, nil)
+		if err != nil {
+			log.Errorf("retrieve external ip error: %v", err)
+			continue
+		}
+		httpResp, err := client.Do(httpReq)
+		if err != nil {
+			log.Errorf("http api call failed: %v", err)
+			continue
+		}
+		if httpResp != nil{
+			httpResp.Close = true
+		}
+
+		ipResp := new(IPRespModel)
+
+		httpRespBytes, err := ioutil.ReadAll(httpResp.Body)
+		if err != nil {
+			log.Errorf("http api call result read error: %v, %v", httpRespBytes, err)
+		}
+		err = json.Unmarshal(httpRespBytes, &ipResp)
+		if err != nil {
+			log.Errorf("retrieve external ip error: %v", err)
+			continue
+		}
+		if ipResp.Ip != "" {
+			ip = ipResp.Ip
+			log.Infof("API result of obtain external ip: %v", ipResp)
+		}
+		if ipResp.Address != "" {
+			ip = ipResp.Address
+			log.Infof("API result of obtain external ip: %v", ipResp)
+		}
+		if ip != "" {
+			break
+		}
+	}
+
+	if ip == "" {
+		return "", errors.New("can't obtain your external ip address")
+	}
+	return ip, nil
 }
 
 func (provider DMProvider) Query(msg *dns.Msg) (*dns.Msg, error) {
@@ -209,13 +332,20 @@ func (provider DMProvider) Query(msg *dns.Msg) (*dns.Msg, error) {
 
 // urlParamsQuery sends a DNS question to Google, and returns the response
 func (provider DMProvider) urlParamsQuery(msg *dns.Msg) (*dns.Msg, error) {
-	// Return fake answer (SOA or empty) if NoAAAA option is on.
+	// Return fake answer (empty) if NoAAAA option is on.
+	isAAAAQ := false
 	if provider.opts.NoAAAA {
 		for _, q := range msg.Question {
 			if q.Qtype == dns.TypeAAAA {
-				q.Qtype = dns.TypeSOA
+				//msg.Question[i].Qtype = dns.TypeSOA
+				isAAAAQ = true
 				break
 			}
+		}
+		if isAAAAQ {
+			msgR := new(dns.Msg)
+			msgR.SetReply(msg)
+			return msgR, nil
 		}
 	}
 
@@ -230,7 +360,10 @@ func (provider DMProvider) urlParamsQuery(msg *dns.Msg) (*dns.Msg, error) {
 	if err != nil {
 		return nil, err
 	}
-
+	httpresp.Close = true
+	defer func() {
+		_ = httpresp.Body.Close()
+	}()
 	rawResponse, err := ioutil.ReadAll(httpresp.Body)
 
 	if err != nil {
@@ -242,6 +375,11 @@ func (provider DMProvider) urlParamsQuery(msg *dns.Msg) (*dns.Msg, error) {
 	idOriginal := msg.Id
 	err = msg.Unpack(rawResponse)
 	msg.Id = idOriginal
+	/*if provider.opts.NoAAAA && isAAAAQ{
+		for i := range msg.Question {
+			msg.Question[i].Qtype = dns.TypeAAAA
+		}
+	}*/
 
 	log.Debugf("Dns Answer Msg: \n%v", msg)
 	if err != nil {
@@ -251,7 +389,7 @@ func (provider DMProvider) urlParamsQuery(msg *dns.Msg) (*dns.Msg, error) {
 }
 
 func (provider DMProvider) dnsMessageQuery(msg *dns.Msg) (*dns.Msg, error) {
-
+	// TODO: implement dns-message query.
 	return msg, nil
 }
 

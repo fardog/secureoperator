@@ -14,16 +14,25 @@ type Handler struct {
 	options           *HandlerOptions
 	provider          Provider
 	hostsFileProvider Provider
+	cache             *Cache
 }
 
 // NewHandler creates a new Handler
 func NewHandler(provider Provider, options *HandlerOptions) *Handler {
 	handler := &Handler{
-		options: options,
-		provider: provider,
+		options:           options,
+		provider:          provider,
 		hostsFileProvider: NewHostsFileProvider(),
+		cache: NewCache(),
 	}
 	return handler
+}
+
+type writerCtx struct {
+	msg           *dns.Msg
+	isAnsweredCh  chan bool
+	isCache       bool
+	edns0SubnetIn dns.EDNS0_SUBNET
 }
 
 // Handle handles a DNS request
@@ -34,59 +43,86 @@ func (h *Handler) Handle(writer dns.ResponseWriter, msg *dns.Msg) {
 	isAnsweredCh := make(chan bool)
 	defer close(isAnsweredCh)
 
+	edns0SubnetIn := ObtainEDN0Subnet(msg)
+	ctx := &writerCtx{msg: msg, isCache: false, isAnsweredCh: isAnsweredCh, edns0SubnetIn: edns0SubnetIn}
+	if h.options.Cache {
+		rmsg := h.cache.Get(msg)
+		if rmsg != nil {
+			rmsg.Id = msg.Id
+			ctx.msg = rmsg
+			ctx.isCache = true
+			go h.TryWriteAnswer(&writer, ctx)
+			if <-isAnsweredCh {
+				log.Infof("resolved from cache: %v", msg.Question[0].Name)
+				return
+			}
+		}
+	}
+
 	// lookup hosts file if retrieving ip address
 	if msg.Question[0].Qtype == dns.TypeA || msg.Question[0].Qtype == dns.TypeAAAA {
-		go h.AnswerByHostsFile(&writer, msg, isAnsweredCh)
+		go h.AnswerByHostsFile(&writer, ctx)
 		if <-isAnsweredCh {
-			log.Debugf("resolved from hosts: %v",  msg.Question[0].Name)
+			log.Infof("resolved from hosts: %v", msg.Question[0].Name)
 			return
 		}
 	}
 
-	go h.AnswerByDoH(&writer, msg, isAnsweredCh)
+	go h.AnswerByDoH(&writer, ctx)
 	if <-isAnsweredCh {
-		log.Debugf("resolved from DoH: %v",  msg.Question[0].Name)
+		log.Infof("resolved from DoH: %v", msg.Question[0].Name)
 		return
 	}
 
 	dns.HandleFailed(writer, msg)
 }
 
-func (h *Handler) TryWriteAnswer(writer *dns.ResponseWriter, rMsg *dns.Msg, isAnsweredCh chan bool) {
-	if rMsg != nil {
+func (h *Handler) TryWriteAnswer(writer *dns.ResponseWriter, ctx *writerCtx) {
+	if ctx.msg != nil {
+		ReplaceEDNS0Subnet(ctx.msg, ctx.edns0SubnetIn)
+		if h.options.Cache && !ctx.isCache {
+			msgch := make(chan *dns.Msg)
+			defer close(msgch)
+			go h.cache.Insert(msgch)
+			msgch <- ctx.msg
+		}
 		// Write the response
 		writerReal := *writer
-		err := writerReal.WriteMsg(rMsg)
+		err := writerReal.WriteMsg(ctx.msg)
 		if err != nil {
 			log.Errorf("Error writing DNS response: %v", err)
-			isAnsweredCh <- false
+			ctx.isAnsweredCh <- false
 		} else {
-			isAnsweredCh <- true
+			ctx.isAnsweredCh <- true
 			log.Debugf("Successfully write response message")
 		}
 	} else {
-		isAnsweredCh <- false
+		ctx.isAnsweredCh <- false
 	}
 }
 
-func (h *Handler) AnswerByHostsFile(writer *dns.ResponseWriter,msg *dns.Msg, isOKCh chan bool) {
+func (h *Handler) AnswerByHostsFile(writer *dns.ResponseWriter, ctx *writerCtx) {
 
-	msgR, err := h.hostsFileProvider.Query(msg)
+	msgR, err := h.hostsFileProvider.Query(ctx.msg)
 	if err != nil {
 		log.Debugf("hosts file provider failed: %v", err)
-		isOKCh <- false
+		ctx.isAnsweredCh <- false
 		return
 	}
-	go h.TryWriteAnswer(writer, msgR, isOKCh)
+	ctx.msg = msgR
+	ctx.isCache = false
+	go h.TryWriteAnswer(writer, ctx)
 }
 
-func (h *Handler) AnswerByDoH(writer *dns.ResponseWriter, msg *dns.Msg, isOKCh chan bool) {
+func (h *Handler) AnswerByDoH(writer *dns.ResponseWriter, ctx *writerCtx) {
 
-	msgR, err := h.provider.Query(msg)
+	msgR, err := h.provider.Query(ctx.msg)
 	if err != nil {
 		log.Errorf("dns-message provider failed: %v", err)
-		isOKCh <- false
+		ctx.isAnsweredCh <- false
 		return
 	}
-	go h.TryWriteAnswer(writer, msgR, isOKCh)
+	ctx.msg = msgR
+	ctx.isCache = false
+	go h.TryWriteAnswer(writer, ctx)
 }

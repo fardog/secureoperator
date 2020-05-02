@@ -10,6 +10,19 @@
   version = "v1.0.3"
 
 [[projects]]
+  digest = "1:f21c1a68814ffc02db479adbd973c710e0ece6150ddc0726655c0a2048299152"
+  name = "github.com/emirpasic/gods"
+  packages = [
+    "containers",
+    "trees",
+    "trees/redblacktree",
+    "utils",
+  ]
+  pruneopts = ""
+  revision = "1615341f118ae12f353cc8a983f35b584342c9b3"
+  version = "v1.12.0"
+
+[[projects]]
   digest = "1:0f51cee70b0d254dbc93c22666ea2abf211af81c1701a96d04e2284b408621db"
   name = "github.com/konsorten/go-windows-terminal-sequences"
   packages = ["."]
@@ -115,6 +128,7 @@
   analyzer-version = 1
   input-imports = [
     "github.com/antonfisher/nested-logrus-formatter",
+    "github.com/emirpasic/gods/trees/redblacktree",
     "github.com/miekg/dns",
     "github.com/sirupsen/logrus",
     "github.com/zput/zxcTool/ztLog/zt_formatter",

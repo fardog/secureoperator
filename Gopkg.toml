@@ -36,3 +36,7 @@
 [[override]]
  name = "github.com/zput/zxcTool"
  version = "2.0.2"
+
+[[override]]
+ name = "github.com/emirpasic/gods"
+ version = "1.12"
