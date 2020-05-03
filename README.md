@@ -41,7 +41,7 @@ ExecStart=/usr/local/bin/doh-proxy -google -http2 -endpoint "https://dns.google/
 WantedBy=multi-user.target
 ```
 
-##Usage 
+##Usage
 
 Then either run the binary you downloaded, or the built package with:
 ```
