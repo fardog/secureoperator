@@ -33,7 +33,7 @@ type Cache struct {
 	nextExpireTime int64
 	cacheStore     map[string]*cacheItem
 	cacheReg       *RedBlackTreeExtended
-	wLock          sync.Mutex
+	lock           sync.RWMutex
 }
 
 type cacheItem struct {
@@ -103,8 +103,8 @@ func (c *Cache) doExpire(/*notify chan bool*/) {
 }
 
 func (c *Cache) expireAction(entry cacheEntry) {
-	c.wLock.Lock()
-	defer c.wLock.Unlock()
+	c.lock.Lock()
+	defer c.lock.Unlock()
 	log.Debugf("cache dropping : %v", entry)
 	c.cacheReg.Remove(entry.TimeExpire)
 	delete(c.cacheStore, entry.Key)
@@ -127,8 +127,8 @@ func (c *Cache) realInsert(msg *dns.Msg) {
 		return
 	}
 
-	c.wLock.Lock()
-	defer c.wLock.Unlock()
+	c.lock.Lock()
+	defer c.lock.Unlock()
 	c.cacheStore[qStr] = &cacheItem{TimeArrival: now, MsgBytes: bytesMsg}
 	// use minimal ttl in dns-message to expire early.
 	expireTime := now + int64(minTTL)
@@ -148,6 +148,10 @@ func (c *Cache) realInsert(msg *dns.Msg) {
 
 func (c *Cache) Get(msgQ *dns.Msg) (rMsg *dns.Msg) {
 	qStr := getQueryStringForCache(msgQ)
+
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+
 	cacheRet := c.cacheStore[qStr]
 	if cacheRet == nil || cacheRet.MsgBytes == nil {
 		return nil
