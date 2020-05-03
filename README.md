@@ -112,10 +112,6 @@ This package follows [semver][] for its tagged releases. The `master` branch is
 always considered stable, but may break API compatibility. If you require API
 stability, either use the tagged releases or mirror on gopkg.in:
 
-```
-go get -u gopkg.in/fardog/secureoperator.v4
-```
-
 ## Security
 
 Note that while DNS requests are made over HTTPS, this does not imply "secure";
