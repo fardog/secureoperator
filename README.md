@@ -1,4 +1,4 @@
-# secureoperator
+# doh-proxy
 
 [![Build Status](https://travis-ci.com/tinkernels/doh-proxy.svg?branch=master)](https://travis-ci.com/tinkernels/doh-proxy)
 [![Go Doc](https://godoc.org/github.com/fardog/secureoperator?status.svg)](https://godoc.org/github.com/fardog/secureoperator)
