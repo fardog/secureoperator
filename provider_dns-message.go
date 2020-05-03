@@ -444,7 +444,7 @@ func (provider DMProvider) dnsMessageQuery(msg *dns.Msg) (*dns.Msg, error) {
 	}
 	lenOfBytes := len(bytesMsg)
 
-	paddingLength := CalculatePaddingLength(lenOfBytes)
+	paddingLength := CalculatePaddingLength(lenOfBytes, 128, 128)
 	if paddingLength > 0 {
 		pad(paddingLength)
 	}
@@ -483,7 +483,7 @@ func (provider DMProvider) dnsMessageQuery(msg *dns.Msg) (*dns.Msg, error) {
 	if lenQuery > MaxBytesOfDNSMessage {
 		log.Errorf("GET Header is too large: %v > %v", lenQuery, MaxBytesOfDNSMessage)
 	}
-	log.Debugf("http url: %v <- size %v", httpReq.URL, len([]byte(httpReq.URL.String())))
+	log.Debugf("http url: %v <- size: %v", httpReq.URL, len([]byte(httpReq.URL.String())))
 
 	httpResp, err := provider.fireDoHRequest(httpReq)
 	if err != nil {
@@ -558,14 +558,13 @@ func (provider DMProvider) parameterizedRequest(msg *dns.Msg) (*http.Request, er
 	qry.Add("ct", ContentType)
 	httpReq.URL.RawQuery = qry.Encode()
 
-	lengthOfUrlPreAllocated := len(httpReq.URL.String()) + len(PaddingParameter) + len("&=")
+	lengthOfUrlPreAllocated := len([]byte((httpReq.URL.String()) + PaddingParameter + "&="))
 
-	paddingLength := CalculatePaddingLength(lengthOfUrlPreAllocated)
+	paddingLength := CalculatePaddingLength(lengthOfUrlPreAllocated, 128, 64)
 	// block length padding 128x total length.
 	if paddingLength > 0 {
 		qry.Add(PaddingParameter, GenerateUrlSafeString(paddingLength))
 	}
-
 
 	httpReq.URL.RawQuery = qry.Encode()
 
@@ -573,7 +572,7 @@ func (provider DMProvider) parameterizedRequest(msg *dns.Msg) (*http.Request, er
 	if lenQName > MaxBytesOfDNSName {
 		return nil, fmt.Errorf("name length of %v exceeds DNS name max length", lenQName)
 	}
-	log.Debugf("http url: %v", httpReq.URL)
+	log.Debugf("http url: %v <- size %v", httpReq.URL, len([]byte(httpReq.URL.String())))
 	return httpReq, nil
 }
 
@@ -770,7 +769,7 @@ func (provider *DMProvider) GetIPsClosure(name string) (closure func() (ip4s []s
 	}
 }
 
-func placeSubnetToMsg(subnet string, msg *dns.Msg){
+func placeSubnetToMsg(subnet string, msg *dns.Msg) {
 	_, ipNet, err := net.ParseCIDR(subnet)
 	if err != nil {
 		log.Debugf("subnet is not OK: %v", subnet)
@@ -797,11 +796,12 @@ func placeSubnetToMsg(subnet string, msg *dns.Msg){
 	}
 }
 
-func CalculatePaddingLength(preAllocatedLen int)int{
+func CalculatePaddingLength(preAllocatedLen int, least int, gain int) int {
 	paddingLength := 0
-	for i :=1 ; ; i ++ {
-		if preAllocatedLen <= i*128 {
-			paddingLength = i*128 - preAllocatedLen
+	for i := 0; ; i++ {
+		nextDesireTotalLen := least + i*gain
+		if nextDesireTotalLen >= preAllocatedLen {
+			paddingLength = nextDesireTotalLen - preAllocatedLen
 			log.Debugf("padding length: %v", paddingLength)
 			break
 		}
