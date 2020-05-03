@@ -14,4 +14,4 @@ require (
 	golang.org/x/sys v0.0.0-20200420163511-1957bb5e6d1f // indirect
 )
 
-replace github.com/tinkernels/logrus v1.6.0 => github.com/sirupsen/logrus v1.6.0
+replace github.com/sirupsen/logrus v1.6.0 => github.com/tinkernels/logrus v1.6.2

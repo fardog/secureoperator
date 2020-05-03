@@ -1,5 +1,3 @@
-package = github.com/tinkernels/doh-proxy
-
 build_flags = -ldflags "-w -s"
 
 .PHONY: release test

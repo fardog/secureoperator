@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	rbt "github.com/emirpasic/gods/trees/redblacktree"
+	"github.com/emirpasic/gods/trees/redblacktree"
 	"testing"
 )
 
@@ -18,7 +18,7 @@ func printTree(tree *RedBlackTreeExtended) {
 
 func TestRedBlackTreeExtended(t *testing.T) {
 	// RedBlackTreeExtendedExample main method on how to use the custom red-black tree above
-	tree = RedBlackTreeExtended{rbt.NewWithIntComparator()}
+	tree = RedBlackTreeExtended{redblacktree.NewWithIntComparator()}
 
 	tree.Put(1, "a") // 1->x (in order)
 	tree.Put(2, "b") // 1->x, 2->b (in order)
