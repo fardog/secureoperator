@@ -23,7 +23,9 @@ func NewHandler(provider Provider, options *HandlerOptions) *Handler {
 		options:           options,
 		provider:          provider,
 		hostsFileProvider: NewHostsFileProvider(),
-		cache: NewCache(),
+	}
+	if options.Cache {
+		handler.cache = NewCache()
 	}
 	return handler
 }
@@ -79,7 +81,7 @@ func (h *Handler) Handle(writer dns.ResponseWriter, msg *dns.Msg) {
 
 func (h *Handler) TryWriteAnswer(writer *dns.ResponseWriter, ctx *writerCtx) {
 	if ctx.msg != nil {
-		ReplaceEDNS0Subnet(ctx.msg, ctx.edns0SubnetIn)
+		ReplaceEDNS0Subnet(ctx.msg, &ctx.edns0SubnetIn)
 		if h.options.Cache && !ctx.isCache {
 			msgch := make(chan *dns.Msg)
 			defer close(msgch)

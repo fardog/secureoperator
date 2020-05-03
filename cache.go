@@ -27,6 +27,8 @@ const (
 		"[QType:%v][QClass:%v][EDNS0Subnet:%v]"
 )
 
+// Use map to store cache, red-black tree to index cache.
+// red-black tree also used to implement the cache expire mechanism.
 type Cache struct {
 	nextExpireTime int64
 	cacheStore     map[string]*cacheItem
@@ -72,7 +74,6 @@ func NewCache() *Cache {
 }
 
 func (c *Cache) expire() {
-	//missionCompletedNotify := make(chan bool)
 	// infinite loop
 	for c.cacheReg != nil {
 		log.Debugf("will drop cache on: %v, current cache size: %v", c.nextExpireTime, c.cacheReg.Size())
@@ -98,7 +99,7 @@ func (c *Cache) doExpire(/*notify chan bool*/) {
 		}
 		log.Debugf("set next expire time %v, current cache size: %v",c.nextExpireTime, c.cacheReg.Size())
 	}
-	/*notify <- true*/
+	log.Infof("current cache size: %v", c.cacheReg.Size())
 }
 
 func (c *Cache) expireAction(entry cacheEntry) {
@@ -120,7 +121,7 @@ func (c *Cache) realInsert(msg *dns.Msg) {
 	log.Debugf("start insert cache: \n%v \n <= \n %v", qStr, msg)
 	now := time.Now().Unix()
 	minTTL := GetMinTTLFromDnsMsg(msg)
-	bytes, err := msg.Pack()
+	bytesMsg, err := msg.Pack()
 	if err != nil {
 		log.Errorf("can't pack dns-message: %v", err)
 		return
@@ -128,7 +129,7 @@ func (c *Cache) realInsert(msg *dns.Msg) {
 
 	c.wLock.Lock()
 	defer c.wLock.Unlock()
-	c.cacheStore[qStr] = &cacheItem{TimeArrival: now, MsgBytes: bytes}
+	c.cacheStore[qStr] = &cacheItem{TimeArrival: now, MsgBytes: bytesMsg}
 	// use minimal ttl in dns-message to expire early.
 	expireTime := now + int64(minTTL)
 	c.cacheReg.Put(expireTime,

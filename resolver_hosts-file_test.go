@@ -12,7 +12,8 @@ func TestResolveFromHostsFile(t *testing.T){
 	t.Log("use net.LookupHost resolved localhost to: ", ipsReal)
 
 	hostsResolver := new(HostsFileResolver)
-	ips := hostsResolver.LookupStaticHost(localhostStr)
+	ips := hostsResolver.LookupStaticHost("rmbp@tinker.")
+	t.Log("use hosts file resolved localhost to: ", ips)
 
 	for _, ip := range ipsReal{
 		ret := false

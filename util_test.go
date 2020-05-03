@@ -1,8 +1,10 @@
 package main
 
 import (
+	"fmt"
 	"net"
 	"testing"
+	"time"
 )
 
 func TestRandSeq(t *testing.T) {
@@ -170,9 +172,24 @@ func TestIfLocalAddr(t *testing.T){
 
 func TestResolve(t *testing.T){
 	ns := "8.8.8.8"
-	t.Logf("using %v resolve domain to ip: %v -> %v", ns,
-		"google.com", ResolveHostToIP("google.com.", ns)())
-	for i := 0; i < 10; i ++{
+	resolver := ResolveHostToIPClosure("google.com.", ns)
 
+	for i := 0; i < 10; i ++{
+		func(){
+			defer track(runningTime("execute"))
+			ip4s, ip16s := resolver()
+			t.Logf("using %v resolve domain to ip: %v -> ipv4: %v, ipv6: %v", ns,
+				"google.com", ip4s, ip16s)
+		}()
 	}
+}
+
+func runningTime(s string) (string, time.Time) {
+	fmt.Printf("Start: %v\n", s)
+	return s, time.Now()
+}
+
+func track(s string, startTime time.Time) {
+	endTime := time.Now()
+	fmt.Printf("End %v took: %v\n", s, endTime.Sub(startTime))
 }

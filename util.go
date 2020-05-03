@@ -100,24 +100,56 @@ func ObtainEDN0Subnet(msg *dns.Msg) (edns0Subnet dns.EDNS0_SUBNET) {
 	return dns.EDNS0_SUBNET{}
 }
 
-func ReplaceEDNS0Subnet(msg *dns.Msg, subnet dns.EDNS0_SUBNET) {
+func ReplaceEDNS0Subnet(msg *dns.Msg, subnet *dns.EDNS0_SUBNET) {
 	var edns0 = msg.IsEdns0()
 	if edns0 != nil {
 		if edns0.Option != nil && len(edns0.Option) > 0 {
 			for i, o := range edns0.Option {
 				switch o.(type) {
 				case *dns.EDNS0_SUBNET:
-					edns0.Option[i] = &subnet
+					if subnet == nil{
+						// nil will panic.
+						edns0.Option = append([]dns.EDNS0{subnet}, edns0.Option...)
+					}else{
+						edns0.Option[i] = subnet
+					}
 					return
 				}
 			}
-			edns0.Option = append([]dns.EDNS0{&subnet}, edns0.Option...)
+			edns0.Option = append([]dns.EDNS0{subnet}, edns0.Option...)
 		} else {
-			edns0.Option = append([]dns.EDNS0{&subnet}, edns0.Option...)
+			edns0.Option = append([]dns.EDNS0{subnet}, edns0.Option...)
 		}
-	} else if &subnet != nil {
+	} else if subnet != nil {
 		opt := &dns.OPT{Hdr: dns.RR_Header{Name: ".", Rrtype: dns.TypeOPT},
-			Option: []dns.EDNS0{&subnet}}
+			Option: []dns.EDNS0{subnet}}
+		msg.Extra = append(msg.Extra, opt)
+	}
+}
+
+func ReplaceEDNS0Padding(msg *dns.Msg, padding *dns.EDNS0_PADDING) {
+	var edns0 = msg.IsEdns0()
+	if edns0 != nil {
+		if edns0.Option != nil && len(edns0.Option) > 0 {
+			for i, o := range edns0.Option {
+				switch o.(type) {
+				case *dns.EDNS0_PADDING:
+					if padding == nil{
+						// nil will panic.
+						edns0.Option = append([]dns.EDNS0{padding}, edns0.Option...)
+					}else{
+						edns0.Option[i] = padding
+					}
+					return
+				}
+			}
+			edns0.Option = append([]dns.EDNS0{padding}, edns0.Option...)
+		} else {
+			edns0.Option = append([]dns.EDNS0{padding}, edns0.Option...)
+		}
+	} else if padding != nil {
+		opt := &dns.OPT{Hdr: dns.RR_Header{Name: ".", Rrtype: dns.TypeOPT},
+			Option: []dns.EDNS0{padding}}
 		msg.Extra = append(msg.Extra, opt)
 	}
 }
@@ -125,6 +157,9 @@ func ReplaceEDNS0Subnet(msg *dns.Msg, subnet dns.EDNS0_SUBNET) {
 func GetMinTTLFromDnsMsg(msg *dns.Msg) (minTTL uint32) {
 	// cache will expire even ttl is greater than 3600 (1hr)
 	minTTL = uint32(3600)
+	if msg == nil {
+		return 0
+	}
 	if len(msg.Answer) == 0 && len(msg.Ns) == 0 {
 		minTTL = 60
 	} else {
@@ -148,28 +183,28 @@ func InsertIntoSlice(to []interface{}, from interface{}, inex int) []interface{}
 	return append(to[:inex], append([]interface{}{from}, to[inex:]...)...)
 }
 
-// resolve domain name to ips (ipv4 + ipv6), fixed 60s ttl
-func ResolveHostToIP(name string, resolver string) (closure func() []string) {
-	var ips []string
-	ipResolver := net.ParseIP(resolver)
-	const ttl = int64(60)
-	timeExpire := int64(0)
-	if ipResolver != nil {
-		resolver = net.JoinHostPort(ipResolver.String(), "53")
-	} else {
-		_, _, err := net.SplitHostPort(resolver)
-		if err != nil {
-			log.Error("Dns resolver can't be recognized: ", err)
-			return nil
-		}
-	}
+// resolve domain name to ips (ipv4 + ipv6) using traditional udp+tcp, fixed 60s ttl
+func ResolveHostToIPClosure(name string, resolver string) (closure func()(ip4s []string, ip6s []string)) {
+	var ip4s, ip16s []string
+
+	const ttl = int64(5)
+	timeExpire := time.Now().Unix()
 
 	resolve := func() {
+		ipResolver := net.ParseIP(resolver)
+		if ipResolver != nil {
+			resolver = net.JoinHostPort(ipResolver.String(), "53")
+		} else {
+			_, _, err := net.SplitHostPort(resolver)
+			if err != nil {
+				log.Error("Dns resolver can't be recognized: ", err)
+				return
+			}
+		}
 		mA4 := new(dns.Msg)
 		mA4.SetQuestion(dns.CanonicalName(name), dns.TypeA)
 		mA6 := new(dns.Msg)
 		mA6.SetQuestion(name, dns.TypeAAAA)
-		var ipsResolved []string
 		for _, dnsNet := range []string{"tcp", "udp"} {
 			client := &dns.Client{Net: dnsNet}
 			// ipv4
@@ -179,12 +214,12 @@ func ResolveHostToIP(name string, resolver string) (closure func() []string) {
 				continue
 			} else {
 				if r4.Answer != nil {
-					for _, ip := range r4.Answer {
-						switch ip.(type) {
+					for _, answer := range r4.Answer {
+						switch answer.(type) {
 						case *dns.A:
-							ipv := ip.(*dns.A)
+							ipv := answer.(*dns.A)
 							if ipv != nil {
-								ipsResolved = append(ipsResolved, ipv.A.String())
+								ip4s = append(ip4s, ipv.A.String())
 							}
 						}
 					}
@@ -198,27 +233,28 @@ func ResolveHostToIP(name string, resolver string) (closure func() []string) {
 				continue
 			} else {
 				if r6.Answer != nil {
-					for _, ip := range r6.Answer {
-						switch ip.(type) {
+					for _, answer := range r6.Answer {
+						switch answer.(type) {
 						case *dns.AAAA:
-							ipv := ip.(*dns.AAAA)
+							ipv := answer.(*dns.AAAA)
 							if ipv != nil {
-								ipsResolved = append(ipsResolved, ipv.AAAA.String())
+								ip16s = append(ip16s, ipv.AAAA.String())
 							}
 						}
 					}
 				}
 			}
 		}
-		ips = ipsResolved
 		timeExpire = time.Now().Unix() + ttl
 	}
-	return func()[]string{
-		if len(ips) == 0{
+	return func()([]string,[]string){
+		if len(ip4s) == 0 && len(ip16s) == 0{
+			log.Infof("no cache.")
 			resolve()
 		}else if time.Now().Unix() > timeExpire {
 			go resolve()
 		}
-		return ips
+		log.Infof("using cache.")
+		return ip4s, ip16s
 	}
 }

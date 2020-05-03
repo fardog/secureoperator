@@ -96,8 +96,7 @@ net/mask: will use specified subnet, e.g. 66.66.66.66/24.
 	dnsResolverFlag = flag.String(
 		"dns-resolver",
 		"",
-		`dns resolver for retrieve ip of DoH enpoint host, e.g. "8.8.8.8:53";
-NOTICE: only resolve to IPv4`,
+		`dns resolver for retrieve ip of DoH enpoint host, e.g. "8.8.8.8:53";`,
 		)
 )
 
@@ -135,14 +134,13 @@ specify multiple as:
 	)
 	flag.Usage = func() {
 		_, exe := filepath.Split(os.Args[0])
-		_, _ = fmt.Fprint(os.Stderr, "A DNS-protocol proxy for Google's DNS-over-HTTPS service.\n\n")
+		_, _ = fmt.Fprint(os.Stderr, "A DNS-protocol proxy for DNS-over-HTTPS service.\n\n")
 		_, _ = fmt.Fprintf(os.Stderr, "Usage:\n\n  %s [options]\n\nOptions:\n\n", exe)
 		flag.PrintDefaults()
 	}
 	flag.Parse()
 
-	// seed the global random number generator, used in some utilities and the
-	// google provider
+	// seed the global random number generator
 	rand.Seed(time.Now().UTC().UnixNano())
 
 	// set the loglevel
@@ -150,19 +148,20 @@ specify multiple as:
 	if err != nil {
 		log.Fatalf("invalid log level: %s", err.Error())
 	}
+
 	log.SetLevel(level)
 	fmt.Println("log level: ", log.GetLevel())
 	log.SetReportCaller(true)
+
+	// use logrus default TextFormatter to get the IsColored() method.
 	defaultTextFormat := logrus.TextFormatter{}
 	_, _ = defaultTextFormat.Format(&logrus.Entry{Logger: log})
-	//reflect.ValueOf(defaultTextFormat).MethodByName
 	log.SetFormatter(&zt_formatter.ZtFormatter{
 		CallerPrettyfier: func(f *runtime.Frame) (string, string) {
 			filename := path.Base(f.File)
 			return fmt.Sprintf("%s()", f.Function), fmt.Sprintf("%s:%d", filename, f.Line)
 		},
 		Formatter: nestedformatter.Formatter{
-			// HideKeys: true,
 			FieldsOrder: []string{"component", "category"},
 			NoColors: !defaultTextFormat.IsColored(),
 			NoFieldsColors: !defaultTextFormat.IsColored(),
