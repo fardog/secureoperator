@@ -54,9 +54,6 @@ github.com/stretchr/testify v1.2.2/go.mod h1:a8OnRcib4nhh0OaRAV+Yts87kKdq0PP7pXf
 github.com/stretchr/testify v1.3.0 h1:TivCn/peBQ7UY8ooIcPgZFpTNSz0Q2U6UrFlUfqbe0Q=
 github.com/stretchr/testify v1.3.0/go.mod h1:M5WIy9Dh21IEIfnGCwXGc5bZfKNJtfHm1UVUgZn+9EI=
 github.com/syndtr/goleveldb v0.0.0-20181127023241-353a9fca669c/go.mod h1:Z4AUp2Km+PwemOoO/VB5AOx9XSsIItzFjoJlOSiYmn0=
-github.com/tinkernels/doh-proxy v1.1.1 h1:ZS9OOM7Qvc7P27ZJasZ4GN59ujvFXE/4vQAPXDH4coA=
-github.com/tinkernels/doh-proxy v5.0.0+incompatible h1:Wt7DUmA1AvbUSBZkk54MpBMSV6VYM0S0VX3rhGvGRhU=
-github.com/tinkernels/doh-proxy v5.0.0+incompatible/go.mod h1:w+NYpYKzo8ZvcnzGbvgfmENgtautA6tcXeRgih6yzXI=
 github.com/tinkernels/logrus v1.6.3-0.20200504002045-e1db8d0b9817 h1:yv2LLvL1GbzFzmtSHxLM3TNV9UjvM+hoX1jFOEVtgUI=
 github.com/tinkernels/logrus v1.6.3-0.20200504002045-e1db8d0b9817/go.mod h1:7uNnSEd1DgxDLC74fIahvMZmmYsHGZGEOFrfsX/uA88=
 github.com/ugorji/go v1.1.4/go.mod h1:uQMGLiO92mf5W77hV/PUCpI3pbzQx3CRekS0kk+RGrc=
