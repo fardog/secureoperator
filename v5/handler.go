@@ -1,4 +1,4 @@
-package main
+package dohProxy
 
 import (
 	"github.com/miekg/dns"
@@ -40,7 +40,7 @@ type writerCtx struct {
 // Handle handles a DNS request
 func (h *Handler) Handle(writer dns.ResponseWriter, msg *dns.Msg) {
 
-	log.Infoln("requesting", msg.Question[0].Name, dns.TypeToString[msg.Question[0].Qtype])
+	Log.Infoln("requesting", msg.Question[0].Name, dns.TypeToString[msg.Question[0].Qtype])
 
 	isAnsweredCh := make(chan bool)
 	defer close(isAnsweredCh)
@@ -55,7 +55,7 @@ func (h *Handler) Handle(writer dns.ResponseWriter, msg *dns.Msg) {
 			ctx.isCache = true
 			go h.TryWriteAnswer(&writer, ctx)
 			if <-isAnsweredCh {
-				log.Infof("resolved from cache: %v", msg.Question[0].Name)
+				Log.Infof("resolved from cache: %v", msg.Question[0].Name)
 				return
 			}
 		}
@@ -65,14 +65,14 @@ func (h *Handler) Handle(writer dns.ResponseWriter, msg *dns.Msg) {
 	if msg.Question[0].Qtype == dns.TypeA || msg.Question[0].Qtype == dns.TypeAAAA {
 		go h.AnswerByHostsFile(&writer, ctx)
 		if <-isAnsweredCh {
-			log.Infof("resolved from hosts: %v", msg.Question[0].Name)
+			Log.Infof("resolved from hosts: %v", msg.Question[0].Name)
 			return
 		}
 	}
 
 	go h.AnswerByDoH(&writer, ctx)
 	if <-isAnsweredCh {
-		log.Infof("resolved from DoH: %v", msg.Question[0].Name)
+		Log.Infof("resolved from DoH: %v", msg.Question[0].Name)
 		return
 	}
 
@@ -92,11 +92,11 @@ func (h *Handler) TryWriteAnswer(writer *dns.ResponseWriter, ctx *writerCtx) {
 		writerReal := *writer
 		err := writerReal.WriteMsg(ctx.msg)
 		if err != nil {
-			log.Errorf("Error writing DNS response: %v", err)
+			Log.Errorf("Error writing DNS response: %v", err)
 			ctx.isAnsweredCh <- false
 		} else {
 			ctx.isAnsweredCh <- true
-			log.Debugf("Successfully write response message")
+			Log.Debugf("Successfully write response message")
 		}
 	} else {
 		ctx.isAnsweredCh <- false
@@ -107,7 +107,7 @@ func (h *Handler) AnswerByHostsFile(writer *dns.ResponseWriter, ctx *writerCtx) 
 
 	msgR, err := h.hostsFileProvider.Query(ctx.msg)
 	if err != nil {
-		log.Debugf("hosts file provider failed: %v", err)
+		Log.Debugf("hosts file provider failed: %v", err)
 		ctx.isAnsweredCh <- false
 		return
 	}
@@ -120,7 +120,7 @@ func (h *Handler) AnswerByDoH(writer *dns.ResponseWriter, ctx *writerCtx) {
 
 	msgR, err := h.provider.Query(ctx.msg)
 	if err != nil {
-		log.Errorf("dns-message provider failed: %v", err)
+		Log.Errorf("dns-message provider failed: %v", err)
 		ctx.isAnsweredCh <- false
 		return
 	}

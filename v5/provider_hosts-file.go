@@ -1,4 +1,4 @@
-package main
+package dohProxy
 
 import (
 	"errors"
@@ -19,10 +19,10 @@ func NewHostsFileProvider() *HostsFileProvider {
 	provider := new(HostsFileProvider)
 	if runtime.GOOS == "windows" {
 		provider.resolver.path = filepath.FromSlash("C:/Windows/System32/drivers/etc/hosts")
-		log.Debugf("set %v hosts path: %v", runtime.GOOS, provider.resolver.path)
+		Log.Debugf("set %v hosts path: %v", runtime.GOOS, provider.resolver.path)
 	} else {
 		provider.resolver.path = filepath.FromSlash("/etc/hosts")
-		log.Debugf("set %v hosts path: %v", runtime.GOOS, provider.resolver.path)
+		Log.Debugf("set %v hosts path: %v", runtime.GOOS, provider.resolver.path)
 	}
 	return provider
 }
@@ -78,7 +78,7 @@ func (provider *HostsFileProvider) Query(msg *dns.Msg) (*dns.Msg, error) {
 	if rMsg.Answer == nil || len(rMsg.Answer) == 0 {
 		return nil, errors.New("no answer form hostsfile")
 	}
-	log.Debugf("hosts resolved:\n %v", rMsg)
+	Log.Debugf("hosts resolved:\n %v", rMsg)
 	return rMsg, nil
 }
 

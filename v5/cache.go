@@ -1,4 +1,4 @@
-package main
+package dohProxy
 
 import (
 	"fmt"
@@ -76,10 +76,10 @@ func NewCache() *Cache {
 func (c *Cache) expire() {
 	// infinite loop
 	for c.cacheReg != nil {
-		log.Debugf("will drop cache on: %v, current cache size: %v", c.nextExpireTime, c.cacheReg.Size())
+		Log.Debugf("will drop cache on: %v, current cache size: %v", c.nextExpireTime, c.cacheReg.Size())
 		if time.Now().Unix() > c.nextExpireTime {
 			c.doExpire()
-			log.Debugf("cache expire scheduled, current cache size: %v", c.cacheReg.Size())
+			Log.Debugf("cache expire scheduled, current cache size: %v", c.cacheReg.Size())
 		}
 		time.Sleep(2 * time.Second)
 	}
@@ -97,18 +97,18 @@ func (c *Cache) doExpire(/*notify chan bool*/) {
 		if found {
 			c.nextExpireTime = hang.(cacheEntry).TimeExpire
 		}
-		log.Debugf("set next expire time %v, current cache size: %v",c.nextExpireTime, c.cacheReg.Size())
+		Log.Debugf("set next expire time %v, current cache size: %v",c.nextExpireTime, c.cacheReg.Size())
 	}
-	log.Infof("current cache size: %v", c.cacheReg.Size())
+	Log.Infof("current cache size: %v", c.cacheReg.Size())
 }
 
 func (c *Cache) expireAction(entry cacheEntry) {
 	c.lock.Lock()
 	defer c.lock.Unlock()
-	log.Debugf("cache dropping : %v", entry)
+	Log.Debugf("cache dropping : %v", entry)
 	c.cacheReg.Remove(entry.TimeExpire)
 	delete(c.cacheStore, entry.Key)
-	log.Debugf("cache dropped once, cache size: %v", c.cacheReg.Size())
+	Log.Debugf("cache dropped once, cache size: %v", c.cacheReg.Size())
 }
 
 func (c *Cache) Insert(msgCh <-chan *dns.Msg) {
@@ -118,12 +118,12 @@ func (c *Cache) Insert(msgCh <-chan *dns.Msg) {
 
 func (c *Cache) realInsert(msg *dns.Msg) {
 	qStr := getQueryStringForCache(msg)
-	log.Debugf("start insert cache: \n%v \n <= \n %v", qStr, msg)
+	Log.Debugf("start insert cache: \n%v \n <= \n %v", qStr, msg)
 	now := time.Now().Unix()
 	minTTL := GetMinTTLFromDnsMsg(msg)
 	bytesMsg, err := msg.Pack()
 	if err != nil {
-		log.Errorf("can't pack dns-message: %v", err)
+		Log.Errorf("can't pack dns-message: %v", err)
 		return
 	}
 
@@ -137,11 +137,11 @@ func (c *Cache) realInsert(msg *dns.Msg) {
 			Key: qStr, TimeExpire: expireTime,
 		})
 	if c.cacheReg.Size() < 100 {
-		log.Debugf("cache registry: %v", c.cacheReg)
+		Log.Debugf("cache registry: %v", c.cacheReg)
 	}
 	if expireTime < c.nextExpireTime {
 		c.nextExpireTime = expireTime
-		log.Debugf("next cache entry expire on: %v <= %vs",
+		Log.Debugf("next cache entry expire on: %v <= %vs",
 			c.nextExpireTime, time.Now().Unix()-c.nextExpireTime)
 	}
 }
@@ -160,10 +160,10 @@ func (c *Cache) Get(msgQ *dns.Msg) (rMsg *dns.Msg) {
 	msgRet := new(dns.Msg)
 	err := msgRet.Unpack(cacheRet.MsgBytes)
 	if err != nil {
-		log.Errorf("can't unpack dns-message: %v", err)
+		Log.Errorf("can't unpack dns-message: %v", err)
 		return nil
 	}
-	log.Debugf("cache query result: \n%v \n => cacheArrivalTime: %v\n %v", qStr, cacheArrivalTime, msgRet)
+	Log.Debugf("cache query result: \n%v \n => cacheArrivalTime: %v\n %v", qStr, cacheArrivalTime, msgRet)
 	// recalculate ttl.
 	for _, rs :=
 	range [][]dns.RR{msgRet.Answer, msgRet.Ns} {
@@ -193,6 +193,6 @@ func getQueryStringForCache(msg *dns.Msg) (q string) {
 		msg.Opcode, msg.Truncated, msg.RecursionDesired, msg.Zero, msg.CheckingDisabled,
 		dns.CanonicalName(msg.Question[0].Name), msg.Question[0].Qtype, msg.Question[0].Qclass,
 		edns0Subnet)
-	log.Debugf("cache query string: %v", queryStr)
+	Log.Debugf("cache query string: %v", queryStr)
 	return queryStr
 }

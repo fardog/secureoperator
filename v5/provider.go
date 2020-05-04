@@ -1,4 +1,4 @@
-package main
+package dohProxy
 
 import (
 	"github.com/miekg/dns"

@@ -3,20 +3,17 @@ package main
 import (
 	"flag"
 	"fmt"
+	proxy "github.com/tinkernels/doh-proxy/v5"
 	"math/rand"
 	"net/http"
 	"os"
 	"os/signal"
-	"path"
 	"path/filepath"
-	"runtime"
 	"syscall"
 	"time"
 
-	nestedformatter "github.com/antonfisher/nested-logrus-formatter"
 	"github.com/miekg/dns"
 	"github.com/sirupsen/logrus"
-	"github.com/zput/zxcTool/ztLog/zt_formatter"
 )
 
 const (
@@ -24,7 +21,7 @@ const (
 )
 
 // Create a new instance of the logger. You can have any number of instances.
-var log = logrus.New()
+var log = proxy.Log
 
 var (
 	listenAddressFlag = flag.String(
@@ -73,8 +70,8 @@ net/mask: will use specified subnet, e.g. 66.66.66.66/24.
 	enableUDPFlag = flag.Bool("udp", true, "Listen on UDP")
 
 	// variables set in main body
-	headersFlag     = make(KeyValue)
-	queryParameters = make(KeyValue)
+	headersFlag     = make(proxy.KeyValue)
+	queryParameters = make(proxy.KeyValue)
 
 	http2Flag = flag.Bool(
 		"http2",
@@ -151,24 +148,9 @@ specify multiple as:
 
 	log.SetLevel(level)
 	fmt.Println("log level: ", log.GetLevel())
-	log.SetReportCaller(true)
 
-	// use logrus default TextFormatter to get the IsColored() method.
-	defaultTextFormat := logrus.TextFormatter{}
-	_, _ = defaultTextFormat.Format(&logrus.Entry{Logger: log})
-	log.SetFormatter(&zt_formatter.ZtFormatter{
-		CallerPrettyfier: func(f *runtime.Frame) (string, string) {
-			filename := path.Base(f.File)
-			return fmt.Sprintf("%s()", f.Function), fmt.Sprintf("%s:%d", filename, f.Line)
-		},
-		Formatter: nestedformatter.Formatter{
-			FieldsOrder: []string{"component", "category"},
-			NoColors: !defaultTextFormat.IsColored(),
-			NoFieldsColors: !defaultTextFormat.IsColored(),
-		},
-	})
 
-	endpointIps, err := CSVtoIPs(*endpointIPsFlag)
+	endpointIps, err := proxy.CSVtoIPs(*endpointIPsFlag)
 	if err != nil {
 		log.Fatalf("error parsing endpoint-ips: %v", err)
 	}
@@ -177,7 +159,7 @@ specify multiple as:
 	}
 
 	ep := *endpointFlag
-	opts := &DMProviderOptions{
+	opts := &proxy.DMProviderOptions{
 		EndpointIPs:     endpointIps,
 		EDNSSubnet:      *ednsSubnetFlag,
 		QueryParameters: map[string][]string(queryParameters),
@@ -189,12 +171,12 @@ specify multiple as:
 		DnsResolver:     *dnsResolverFlag,
 	}
 
-	provider, err := NewDMProvider(ep, opts)
+	provider, err := proxy.NewDMProvider(ep, opts)
 	if err != nil {
 		log.Fatal(err)
 	}
-	options := &HandlerOptions{Cache: *cacheFlag}
-	handler := NewHandler(provider, options)
+	options := &proxy.HandlerOptions{Cache: *cacheFlag}
+	handler := proxy.NewHandler(provider, options)
 
 	dns.HandleFunc(".", handler.Handle)
 

@@ -1,14 +1,43 @@
-package main
+package dohProxy
 
 import (
 	"fmt"
+	nestedFormatter "github.com/antonfisher/nested-logrus-formatter"
 	"github.com/miekg/dns"
+	"github.com/sirupsen/logrus"
+	"github.com/zput/zxcTool/ztLog/zt_formatter"
 	"math/rand"
 	"net"
+	"path"
+	"runtime"
 	"strings"
 	"time"
 )
 
+var(
+	Log = NewLogger()
+)
+
+func NewLogger()*logrus.Logger{
+	log := logrus.New()
+	log.SetReportCaller(true)
+
+	// use logrus default TextFormatter to get the IsColored() method.
+	defaultTextFormat := logrus.TextFormatter{}
+	_, _ = defaultTextFormat.Format(&logrus.Entry{Logger: log})
+	log.SetFormatter(&zt_formatter.ZtFormatter{
+		CallerPrettyfier: func(f *runtime.Frame) (string, string) {
+			filename := path.Base(f.File)
+			return fmt.Sprintf("%s()", f.Function), fmt.Sprintf("%s:%d", filename, f.Line)
+		},
+		Formatter: nestedFormatter.Formatter{
+			FieldsOrder: []string{"component", "category"},
+			NoColors: !defaultTextFormat.IsColored(),
+			NoFieldsColors: !defaultTextFormat.IsColored(),
+		},
+	})
+	return log
+}
 func GenerateUrlSafeString(n int) string {
 	letters := []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-._~")
 	b := make([]rune, n)
@@ -197,7 +226,7 @@ func ResolveHostToIPClosure(name string, resolver string) (closure func()(ip4s [
 		} else {
 			_, _, err := net.SplitHostPort(resolver)
 			if err != nil {
-				log.Error("Dns resolver can't be recognized: ", err)
+				Log.Error("Dns resolver can't be recognized: ", err)
 				return
 			}
 		}
@@ -210,7 +239,7 @@ func ResolveHostToIPClosure(name string, resolver string) (closure func()(ip4s [
 			// ipv4
 			r4, _, err := client.Exchange(mA4.Copy(), resolver)
 			if err != nil {
-				log.Errorf("can't resolve endpoint host with provided dns resolver over %v: %v", dnsNet, err)
+				Log.Errorf("can't resolve endpoint host with provided dns resolver over %v: %v", dnsNet, err)
 				continue
 			} else {
 				if r4.Answer != nil {
@@ -229,7 +258,7 @@ func ResolveHostToIPClosure(name string, resolver string) (closure func()(ip4s [
 			// ipv6
 			r6, _, err := client.Exchange(mA6.Copy(), resolver)
 			if err != nil {
-				log.Errorf("can't resolve endpoint host with provided dns resolver over %v: %v", dnsNet, err)
+				Log.Errorf("can't resolve endpoint host with provided dns resolver over %v: %v", dnsNet, err)
 				continue
 			} else {
 				if r6.Answer != nil {
@@ -249,12 +278,12 @@ func ResolveHostToIPClosure(name string, resolver string) (closure func()(ip4s [
 	}
 	return func()([]string,[]string){
 		if len(ip4s) == 0 && len(ip16s) == 0{
-			log.Infof("no cache.")
+			Log.Infof("no cache.")
 			resolve()
 		}else if time.Now().Unix() > timeExpire {
 			go resolve()
 		}
-		log.Infof("using cache.")
+		Log.Infof("using cache.")
 		return ip4s, ip16s
 	}
 }

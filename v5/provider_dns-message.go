@@ -1,4 +1,4 @@
-package main
+package dohProxy
 
 import (
 	"context"
@@ -97,7 +97,7 @@ func NewDMProvider(endpoint string, opts *DMProviderOptions) (*DMProvider, error
 	}
 	err = configHTTPClient(provider)
 	if err != nil {
-		log.Errorf("config http client error: %v", err)
+		Log.Errorf("config http client error: %v", err)
 		return nil, err
 	}
 
@@ -119,7 +119,7 @@ func configHTTPClient(provider *DMProvider) error {
 	if _, err := os.Stat(provider.opts.CACertFilePath); err == nil {
 		caCert, err := ioutil.ReadFile(provider.opts.CACertFilePath)
 		if err != nil {
-			log.Errorf("read custom CA certificate failed : %s", err)
+			Log.Errorf("read custom CA certificate failed : %s", err)
 			return err
 		}
 		caCertPool := x509.NewCertPool()
@@ -147,7 +147,7 @@ func configHTTPClient(provider *DMProvider) error {
 				if err == nil {
 					ip := provider.opts.EndpointIPs[rand.Intn(len(provider.opts.EndpointIPs))]
 					addr = net.JoinHostPort(ip.String(), p)
-					log.Info("endpoint ip address from specified: ", addr)
+					Log.Info("endpoint ip address from specified: ", addr)
 				}
 			} else if provider.opts.DnsResolver != "" {
 				var ip4s, ip16s, ipsResolved []string
@@ -161,7 +161,7 @@ func configHTTPClient(provider *DMProvider) error {
 				ip4s, ip16s = provider.ipResolvers[h]()
 				ipsResolved = append(ip4s, ip16s...)
 				if len(ipsResolved) == 0 {
-					log.Info("Can't resolve endpoint from provided dns server")
+					Log.Info("Can't resolve endpoint from provided dns server")
 					return dialer.DialContext(ctx, network, addr)
 				}
 				ip := ipsResolved[rand.Intn(len(ipsResolved))]
@@ -184,7 +184,7 @@ func (provider *DMProvider) currentSubnetClosure(dnsResolver string, secondsBefo
 	updating := false
 	renewSubnet := func() {
 		updating = true
-		log.Debugf("start obtain your external ip: %v", time.Now().Unix())
+		Log.Debugf("start obtain your external ip: %v", time.Now().Unix())
 		dnsS := dnsResolver
 		if dnsS == "" {
 			dnsS = "8.8.8.8"
@@ -194,10 +194,10 @@ func (provider *DMProvider) currentSubnetClosure(dnsResolver string, secondsBefo
 			ipInt := net.ParseIP(ipExternal)
 			if ipInt.To4() == nil {
 				subnetLastUpdated = ipExternal + "/64"
-				log.Debugf("renew subnet: %v", subnetLastUpdated)
+				Log.Debugf("renew subnet: %v", subnetLastUpdated)
 			} else {
 				subnetLastUpdated = ipExternal + "/32"
-				log.Debugf("renew subnet: %v", subnetLastUpdated)
+				Log.Debugf("renew subnet: %v", subnetLastUpdated)
 			}
 		}
 		expireTime = time.Now().Unix() + 15*60
@@ -205,7 +205,7 @@ func (provider *DMProvider) currentSubnetClosure(dnsResolver string, secondsBefo
 	}
 	return func() string {
 		if time.Now().Unix() < expireTime {
-			log.Debugf("seconds left to obtain external ip again: %v",
+			Log.Debugf("seconds left to obtain external ip again: %v",
 				time.Now().Unix()-expireTime)
 			return subnetLastUpdated
 		} else if subnetLastUpdated != "" {
@@ -255,23 +255,23 @@ func (provider *DMProvider) ObtainCurrentExternalIP(dnsResolver string) (string,
 					// if specified ip for endpoint, only try self query
 					closure = provider.GetIPsClosure(dns.CanonicalName(h))
 					provider.ipResolvers[h] = closure
-					log.Infof("using self query  as ns resolver")
+					Log.Infof("using self query  as ns resolver")
 				} else {
 					closure = ResolveHostToIPClosure(dns.CanonicalName(h), dnsResolver)
 					provider.ipResolvers[h] = closure
-					log.Infof("using %v  as ns resolver: ", dnsResolver)
+					Log.Infof("using %v  as ns resolver: ", dnsResolver)
 				}
 			}
 			ip4s, ip16s = provider.ipResolvers[h]()
 			ipResolved = append(ip4s, ip16s...)
 
 			if len(ipResolved) == 0 {
-				log.Errorf("Can't resolve endpoint %v from self and provided dns server: %v", h, dnsResolver)
+				Log.Errorf("Can't resolve endpoint %v from self and provided dns server: %v", h, dnsResolver)
 				return dialer.DialContext(ctx, network, addr)
 			}
 			ip := ipResolved[rand.Intn(len(ipResolved))]
 			addr = net.JoinHostPort(ip, p)
-			log.Infof("external ip fetcher api endpoint resolved: %v", addr)
+			Log.Infof("external ip fetcher api endpoint resolved: %v", addr)
 			return dialer.DialContext(ctx, network, addr)
 		},
 	}
@@ -279,15 +279,15 @@ func (provider *DMProvider) ObtainCurrentExternalIP(dnsResolver string) (string,
 	client := &http.Client{Transport: tr, Timeout: timeout}
 
 	for _, uri := range apiToTry {
-		log.Debugf("start obtain external ip from: %v", uri)
+		Log.Debugf("start obtain external ip from: %v", uri)
 		httpReq, err := http.NewRequest(http.MethodGet, uri, nil)
 		if err != nil {
-			log.Errorf("retrieve external ip error: %v", err)
+			Log.Errorf("retrieve external ip error: %v", err)
 			continue
 		}
 		httpResp, err := client.Do(httpReq)
 		if err != nil {
-			log.Errorf("http api call failed: %v", err)
+			Log.Errorf("http api call failed: %v", err)
 			continue
 		}
 		if httpResp != nil {
@@ -298,20 +298,20 @@ func (provider *DMProvider) ObtainCurrentExternalIP(dnsResolver string) (string,
 
 		httpRespBytes, err := ioutil.ReadAll(httpResp.Body)
 		if err != nil {
-			log.Errorf("http api call result read error: %v, %v", httpRespBytes, err)
+			Log.Errorf("http api call result read error: %v, %v", httpRespBytes, err)
 		}
 		err = json.Unmarshal(httpRespBytes, &ipResp)
 		if err != nil {
-			log.Errorf("retrieve external ip error: %v", err)
+			Log.Errorf("retrieve external ip error: %v", err)
 			continue
 		}
 		if ipResp.Ip != "" {
 			ip = ipResp.Ip
-			log.Infof("API result of obtain external ip: %v", ipResp)
+			Log.Infof("API result of obtain external ip: %v", ipResp)
 		}
 		if ipResp.Address != "" {
 			ip = ipResp.Address
-			log.Infof("API result of obtain external ip: %v", ipResp)
+			Log.Infof("API result of obtain external ip: %v", ipResp)
 		}
 		if ip != "" {
 			break
@@ -327,7 +327,7 @@ func (provider *DMProvider) ObtainCurrentExternalIP(dnsResolver string) (string,
 func (provider DMProvider) Query(msg *dns.Msg) (*dns.Msg, error) {
 
 	if len(msg.Question) == 0 {
-		log.Debugf("no questions in resolve request.")
+		Log.Debugf("no questions in resolve request.")
 		return nil, errors.New("should have question in resolve request")
 	}
 
@@ -358,7 +358,7 @@ func (provider DMProvider) urlParamsQuery(msg *dns.Msg) (*dns.Msg, error) {
 		}
 	}
 
-	log.Debugf("Dns Question Msg: \n%v", msg)
+	Log.Debugf("Dns Question Msg: \n%v", msg)
 
 	httpReq, err := provider.parameterizedRequest(msg)
 	if err != nil {
@@ -382,12 +382,12 @@ func (provider DMProvider) urlParamsQuery(msg *dns.Msg) (*dns.Msg, error) {
 	rMsg := new(dns.Msg)
 	err = rMsg.Unpack(rawResponse)
 	if err != nil {
-		log.Errorf("unpack dns-message error: %v", err)
+		Log.Errorf("unpack dns-message error: %v", err)
 		return nil, err
 	}
 	rMsg.SetReply(msg)
 
-	log.Debugf("Dns Answer Msg: \n%v", msg)
+	Log.Debugf("Dns Answer Msg: \n%v", msg)
 
 	return rMsg, nil
 }
@@ -409,17 +409,17 @@ func (provider DMProvider) dnsMessageQuery(msg *dns.Msg) (*dns.Msg, error) {
 		}
 	}
 
-	log.Debugf("Dns Question Msg: \n%v", msg)
+	Log.Debugf("Dns Question Msg: \n%v", msg)
 
 	ednsSubnet := ""
 	if provider.opts.EDNSSubnet == "no" {
 		//ReplaceEDNS0Subnet(msg, nil)
-		log.Debug("will not use EDNSSubnet.")
+		Log.Debug("will not use EDNSSubnet.")
 	} else if provider.opts.EDNSSubnet == "auto" {
 		ednsSubnet = provider.autoSubnetGetter()
 	} else {
 		ednsSubnet = provider.opts.EDNSSubnet
-		log.Debugf("will try to use EDNSSubnet you specified: %v", provider.opts.EDNSSubnet)
+		Log.Debugf("will try to use EDNSSubnet you specified: %v", provider.opts.EDNSSubnet)
 	}
 
 	if ednsSubnet != "" {
@@ -440,7 +440,7 @@ func (provider DMProvider) dnsMessageQuery(msg *dns.Msg) (*dns.Msg, error) {
 	pad(0)
 	bytesMsg, err := msg.Pack()
 	if err != nil {
-		log.Errorf("pack message error: %v", err)
+		Log.Errorf("pack message error: %v", err)
 	}
 	lenOfBytes := len(bytesMsg)
 
@@ -451,9 +451,9 @@ func (provider DMProvider) dnsMessageQuery(msg *dns.Msg) (*dns.Msg, error) {
 
 	bytesMsg, err = msg.Pack()
 	if err != nil {
-		log.Errorf("pack message error: %v", err)
+		Log.Errorf("pack message error: %v", err)
 	}
-	log.Debugf("request msg packed size: %v", len(bytesMsg))
+	Log.Debugf("request msg packed size: %v", len(bytesMsg))
 
 	// Http POST
 	//httpReq, err := http.NewRequest(http.MethodPost, provider.url.String(), bytes.NewBuffer(bytesMsg))
@@ -481,9 +481,9 @@ func (provider DMProvider) dnsMessageQuery(msg *dns.Msg) (*dns.Msg, error) {
 
 	lenQuery := len([]byte(httpReq.URL.RawQuery))
 	if lenQuery > MaxBytesOfDNSMessage {
-		log.Errorf("GET Header is too large: %v > %v", lenQuery, MaxBytesOfDNSMessage)
+		Log.Errorf("GET Header is too large: %v > %v", lenQuery, MaxBytesOfDNSMessage)
 	}
-	log.Debugf("http url: %v <- size: %v", httpReq.URL, len([]byte(httpReq.URL.String())))
+	Log.Debugf("http url: %v <- size: %v", httpReq.URL, len([]byte(httpReq.URL.String())))
 
 	httpResp, err := provider.fireDoHRequest(httpReq)
 	if err != nil {
@@ -501,10 +501,10 @@ func (provider DMProvider) dnsMessageQuery(msg *dns.Msg) (*dns.Msg, error) {
 
 	err = msg.Unpack(rawResponse)
 	if err != nil {
-		log.Errorf("unpack dns-message error: %v", err)
+		Log.Errorf("unpack dns-message error: %v", err)
 		return nil, err
 	}
-	log.Debugf("Dns Answer Msg: \n%v", msg)
+	Log.Debugf("Dns Answer Msg: \n%v", msg)
 
 	return msg, nil
 }
@@ -539,15 +539,15 @@ func (provider DMProvider) parameterizedRequest(msg *dns.Msg) (*http.Request, er
 	ednsSubnet := ""
 	if provider.opts.EDNSSubnet == "no" {
 		//ReplaceEDNS0Subnet(msg, nil)
-		log.Debug("will not use EDNSSubnet.")
+		Log.Debug("will not use EDNSSubnet.")
 	} else if provider.opts.EDNSSubnet == "auto" {
 		ednsSubnet = provider.autoSubnetGetter()
 	} else {
 		_, _, err := net.ParseCIDR(provider.opts.EDNSSubnet)
 		if err != nil {
-			log.Debugf("specified subnet is not OK: %v", provider.opts.EDNSSubnet)
+			Log.Debugf("specified subnet is not OK: %v", provider.opts.EDNSSubnet)
 		}
-		log.Debugf("will use EDNSSubnet you specified: %v", provider.opts.EDNSSubnet)
+		Log.Debugf("will use EDNSSubnet you specified: %v", provider.opts.EDNSSubnet)
 		ednsSubnet = provider.opts.EDNSSubnet
 	}
 
@@ -572,7 +572,7 @@ func (provider DMProvider) parameterizedRequest(msg *dns.Msg) (*http.Request, er
 	if lenQName > MaxBytesOfDNSName {
 		return nil, fmt.Errorf("name length of %v exceeds DNS name max length", lenQName)
 	}
-	log.Debugf("http url: %v <- size %v", httpReq.URL, len([]byte(httpReq.URL.String())))
+	Log.Debugf("http url: %v <- size %v", httpReq.URL, len([]byte(httpReq.URL.String())))
 	return httpReq, nil
 }
 
@@ -581,23 +581,23 @@ func (provider DMProvider) doHTTPRequest(cReq <-chan *http.Request, cRsp chan *h
 	httpResp, err := provider.client.Do(req)
 
 	if err != nil {
-		log.Errorf("HttpRequest Error: %v", err)
+		Log.Errorf("HttpRequest Error: %v", err)
 		cRsp <- nil
 	} else {
 		logHttpResp := func() {
 			headerKV := httpResp.Header
 			bodyBytes, _ := ioutil.ReadAll(httpResp.Body)
-			log.Errorf("Error Header:\n%v\nError Body:\n%v", headerKV, string(bodyBytes))
+			Log.Errorf("Error Header:\n%v\nError Body:\n%v", headerKV, string(bodyBytes))
 		}
 		switch httpResp.StatusCode {
 		case 301:
 			// follow 301 redirect once.
-			log.Warnf("301 Moved Permanently.")
+			Log.Warnf("301 Moved Permanently.")
 			newLocation := httpResp.Header.Get("Location")
 			logHttpResp()
 			newUrl, err := url.Parse(newLocation)
 			if err != nil {
-				log.Warnf("parse 301 location error: %v", err)
+				Log.Warnf("parse 301 location error: %v", err)
 				cRsp <- nil
 				break
 			}
@@ -605,55 +605,55 @@ func (provider DMProvider) doHTTPRequest(cReq <-chan *http.Request, cRsp chan *h
 			// refer: https://developers.google.com/speed/public-dns/docs/doh
 			dnsQ := newUrl.Query().Get("dns")
 			if dnsQ == "" {
-				log.Warnf("301 location invalid.")
+				Log.Warnf("301 location invalid.")
 				cRsp <- nil
 				break
 			}
 			req.URL = newUrl
 			reqCh := make(chan *http.Request)
 			provider.doHTTPRequest(reqCh, cRsp)
-			log.Debugf("will try follow redirect url: %v", newUrl)
+			Log.Debugf("will try follow redirect url: %v", newUrl)
 			reqCh <- req
 			return
 		case 400:
-			log.Errorf("400 Bad Request: may be invalid DNS request.")
+			Log.Errorf("400 Bad Request: may be invalid DNS request.")
 			logHttpResp()
 			cRsp <- nil
 			break
 		case 413:
-			log.Errorf("413 Payload Too Large")
+			Log.Errorf("413 Payload Too Large")
 			logHttpResp()
 			cRsp <- nil
 			break
 		case 414:
-			log.Errorf("414 URI Too Long")
+			Log.Errorf("414 URI Too Long")
 			logHttpResp()
 			cRsp <- nil
 			break
 		case 415:
-			log.Errorf("415 Unsupported Media Type: " +
+			Log.Errorf("415 Unsupported Media Type: " +
 				"The POST body did not have an application/dns-message Content-Type header.")
 			logHttpResp()
 			cRsp <- nil
 			break
 		case 429:
-			log.Errorf("429 Too Many Requests: The client has sent too many requests in a given amount of time")
+			Log.Errorf("429 Too Many Requests: The client has sent too many requests in a given amount of time")
 			logHttpResp()
 			cRsp <- nil
 			break
 		case 500:
-			log.Errorf("500 Internal Server Error")
+			Log.Errorf("500 Internal Server Error")
 			logHttpResp()
 			cRsp <- nil
 			break
 		case 501:
-			log.Errorf("501 Not Implemented: " +
+			Log.Errorf("501 Not Implemented: " +
 				"Only GET and POST methods are implemented, other methods get this error.")
 			logHttpResp()
 			cRsp <- nil
 			break
 		case 502:
-			log.Errorf("502 Bad Gateway: The DoH service could not contact DNS resolvers.")
+			Log.Errorf("502 Bad Gateway: The DoH service could not contact DNS resolvers.")
 			logHttpResp()
 			cRsp <- nil
 			break
@@ -707,11 +707,11 @@ func (provider *DMProvider) GetIPsClosure(name string) (closure func() (ip4s []s
 		}
 		providerTmp, err := NewDMProvider(provider.endpoint, opts)
 		if err != nil {
-			log.Errorf("can't get new provider: %v", err)
+			Log.Errorf("can't get new provider: %v", err)
 			return
 		}
 		if providerTmp == nil {
-			log.Errorf("temporary provider is nil")
+			Log.Errorf("temporary provider is nil")
 			return
 		}
 		m4.SetQuestion(qName, dns.TypeA)
@@ -772,7 +772,7 @@ func (provider *DMProvider) GetIPsClosure(name string) (closure func() (ip4s []s
 func placeSubnetToMsg(subnet string, msg *dns.Msg) {
 	_, ipNet, err := net.ParseCIDR(subnet)
 	if err != nil {
-		log.Debugf("subnet is not OK: %v", subnet)
+		Log.Debugf("subnet is not OK: %v", subnet)
 	} else {
 		mask := ipNet.Mask
 		// mask bits count.
@@ -802,7 +802,7 @@ func CalculatePaddingLength(preAllocatedLen int, least int, gain int) int {
 		nextDesireTotalLen := least + i*gain
 		if nextDesireTotalLen >= preAllocatedLen {
 			paddingLength = nextDesireTotalLen - preAllocatedLen
-			log.Debugf("padding length: %v", paddingLength)
+			Log.Debugf("padding length: %v", paddingLength)
 			break
 		}
 	}

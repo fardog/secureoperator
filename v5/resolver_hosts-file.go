@@ -1,4 +1,4 @@
-package main
+package dohProxy
 
 // content in this whole file ripped from go sdk
 

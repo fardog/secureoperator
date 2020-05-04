@@ -1,4 +1,4 @@
-package main
+package dohProxy
 
 import (
 	"net"
@@ -23,7 +23,7 @@ func TestResolveFromHostsFile(t *testing.T){
 			}
 		}
 		if !ret{
-			log.Println("localhost ip must be resolved to isn't resolved:", ip)
+			Log.Println("localhost ip must be resolved to isn't resolved:", ip)
 		}
 	}
 }

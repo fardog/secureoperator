@@ -4,7 +4,7 @@ go:
 - '1.14'
 - '1.14.2'
 - tip
+before_install: cd v5
 install:
-- go get -u -v github.com/tinkernels/doh-proxy
 - make release
 

@@ -1,4 +1,4 @@
-package main
+package dohProxy
 
 import (
 	rbt "github.com/emirpasic/gods/trees/redblacktree"
