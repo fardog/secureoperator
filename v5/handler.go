@@ -2,6 +2,7 @@ package dohProxy
 
 import (
 	"github.com/miekg/dns"
+	"time"
 )
 
 // HandlerOptions specifies options to be used when instantiating a handler
@@ -35,6 +36,7 @@ type writerCtx struct {
 	isAnsweredCh  chan bool
 	isCache       bool
 	edns0SubnetIn dns.EDNS0_SUBNET
+	receivedTime  time.Time
 }
 
 // Handle handles a DNS request
@@ -46,7 +48,8 @@ func (h *Handler) Handle(writer dns.ResponseWriter, msg *dns.Msg) {
 	defer close(isAnsweredCh)
 
 	edns0SubnetIn := ObtainEDN0Subnet(msg)
-	ctx := &writerCtx{msg: msg, isCache: false, isAnsweredCh: isAnsweredCh, edns0SubnetIn: edns0SubnetIn}
+	ctx := &writerCtx{msg: msg, isCache: false, isAnsweredCh: isAnsweredCh,
+		edns0SubnetIn: edns0SubnetIn, receivedTime: time.Now()}
 	if h.options.Cache {
 		rmsg := h.cache.Get(msg)
 		if rmsg != nil {
@@ -55,7 +58,8 @@ func (h *Handler) Handle(writer dns.ResponseWriter, msg *dns.Msg) {
 			ctx.isCache = true
 			go h.TryWriteAnswer(&writer, ctx)
 			if <-isAnsweredCh {
-				Log.Infof("resolved from cache: %v", msg.Question[0].Name)
+				Log.Infof("resolved from cache: %v, cost time: %v",
+					msg.Question[0].Name, time.Now().Sub(ctx.receivedTime))
 				return
 			}
 		}
@@ -65,14 +69,16 @@ func (h *Handler) Handle(writer dns.ResponseWriter, msg *dns.Msg) {
 	if msg.Question[0].Qtype == dns.TypeA || msg.Question[0].Qtype == dns.TypeAAAA {
 		go h.AnswerByHostsFile(&writer, ctx)
 		if <-isAnsweredCh {
-			Log.Infof("resolved from hosts: %v", msg.Question[0].Name)
+			Log.Infof("resolved from hosts: %v, cost time: %v",
+				msg.Question[0].Name, time.Now().Sub(ctx.receivedTime))
 			return
 		}
 	}
 
 	go h.AnswerByDoH(&writer, ctx)
 	if <-isAnsweredCh {
-		Log.Infof("resolved from DoH: %v", msg.Question[0].Name)
+		Log.Infof("resolved from DoH: %v, cost time: %v",
+			msg.Question[0].Name, time.Now().Sub(ctx.receivedTime))
 		return
 	}
 
