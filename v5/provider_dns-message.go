@@ -162,11 +162,14 @@ func configHTTPClient(provider *DMProvider) error {
 				ipsResolved = append(ip4s, ip16s...)
 				if len(ipsResolved) == 0 {
 					Log.Info("Can't resolve endpoint from provided dns server")
-					return dialer.DialContext(ctx, network, addr)
+					return nil, fmt.Errorf("resolve failed during dailing")
 				}
 				ip := ipsResolved[rand.Intn(len(ipsResolved))]
 				// only ipv4 if NoAAAA option is on.
 				if provider.opts.NoAAAA {
+					if len(ip4s) == 0 {
+						return nil, fmt.Errorf("no ipv4 address avaiable for dailing")
+					}
 					ip = ipsResolved[rand.Intn(len(ip4s))]
 				}
 				addr = net.JoinHostPort(ip, p)
@@ -267,7 +270,7 @@ func (provider *DMProvider) ObtainCurrentExternalIP(dnsResolver string) (string,
 
 			if len(ipResolved) == 0 {
 				Log.Errorf("Can't resolve endpoint %v from self and provided dns server: %v", h, dnsResolver)
-				return dialer.DialContext(ctx, network, addr)
+				return nil, fmt.Errorf("resolve failed during dailing")
 			}
 			ip := ipResolved[rand.Intn(len(ipResolved))]
 			addr = net.JoinHostPort(ip, p)
