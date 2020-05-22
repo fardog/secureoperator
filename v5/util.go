@@ -217,7 +217,7 @@ func ResolveHostToIPClosure(name string, resolver string) (closure func()(ip4s [
 	var ip4s, ip16s []string
 
 	const ttl = int64(60)
-	timeExpire := time.Now().Unix()
+	expireTime := time.Now().Unix()
 
 	resolve := func() {
 		ipResolver := net.ParseIP(resolver)
@@ -274,14 +274,19 @@ func ResolveHostToIPClosure(name string, resolver string) (closure func()(ip4s [
 				}
 			}
 		}
-		timeExpire = time.Now().Unix() + ttl
+		expireTime = time.Now().Unix() + ttl
 	}
 	return func()([]string,[]string){
 		if len(ip4s) == 0 && len(ip16s) == 0{
 			Log.Infof("no cache.")
 			resolve()
-		}else if time.Now().Unix() > timeExpire {
+		}else if time.Now().Unix() > expireTime {
 			go resolve()
+		}
+
+		// if empty result, ttl reset to 1
+		if len(ip4s) == 0 && len(ip16s) == 0{
+			expireTime = time.Now().Unix() +1
 		}
 		Log.Infof("using cache.")
 		return ip4s, ip16s

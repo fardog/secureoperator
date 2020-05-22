@@ -755,22 +755,22 @@ func (provider *DMProvider) GetIPsClosure(name string) (closure func() (ip4s []s
 		} else {
 			ttl = ttl6
 		}
-		// min ttl set to 5, for delaying retry.
-		if ttl == 0 { ttl = 5}
+
 		expireTime = time.Now().Unix() + int64(ttl)
 		// set to nil to let the temp provider in GC's sight.
 		providerTmp = nil
 	}
 	return func() ([]string, []string) {
-		if len(append(ip4s, ip16s...)) == 0 {
+		if len(ip4s) == 0 && len(ip16s) == 0 {
 			resolve()
-			return ip4s, ip16s
-		} else {
-			if time.Now().Unix() > expireTime {
-				go resolve()
-			}
-			return ip4s, ip16s
+		} else if time.Now().Unix() > expireTime {
+			go resolve()
 		}
+		// if empty result, ttl reset to 1
+		if len(ip4s) == 0 && len(ip16s) == 0 {
+			expireTime = time.Now().Unix() + 1
+		}
+		return ip4s, ip16s
 	}
 }
 
