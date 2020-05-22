@@ -203,7 +203,7 @@ func (provider *DMProvider) currentSubnetClosure(dnsResolver string, secondsBefo
 				Log.Debugf("renew subnet: %v", subnetLastUpdated)
 			}
 		}
-		expireTime = time.Now().Unix() + 15*60
+		expireTime = time.Now().Unix() + secondsBeforeRetry
 		updating = false
 	}
 	return func() string {
@@ -755,6 +755,8 @@ func (provider *DMProvider) GetIPsClosure(name string) (closure func() (ip4s []s
 		} else {
 			ttl = ttl6
 		}
+		// min ttl set to 5, for delaying retry.
+		if ttl == 0 { ttl = 5}
 		expireTime = time.Now().Unix() + int64(ttl)
 		// set to nil to let the temp provider in GC's sight.
 		providerTmp = nil

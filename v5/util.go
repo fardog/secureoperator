@@ -216,7 +216,7 @@ func InsertIntoSlice(to []interface{}, from interface{}, inex int) []interface{}
 func ResolveHostToIPClosure(name string, resolver string) (closure func()(ip4s []string, ip6s []string)) {
 	var ip4s, ip16s []string
 
-	const ttl = int64(5)
+	const ttl = int64(60)
 	timeExpire := time.Now().Unix()
 
 	resolve := func() {
