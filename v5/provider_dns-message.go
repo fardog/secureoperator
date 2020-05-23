@@ -235,6 +235,7 @@ func (provider *DMProvider) ObtainCurrentExternalIP(dnsResolver string) (string,
 		"https://wq.apnic.net/ip",
 		"https://accountws.arin.net/public/seam/resource/rest/myip",
 		"https://rdap.lacnic.net/rdap/info/myip",
+		"https://api.myip.la/en?json",
 	}
 
 	keepAliveTimeout := 300 * time.Second
