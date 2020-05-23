@@ -77,7 +77,7 @@ func (c *Cache) expire() {
 	// infinite loop
 	for c.cacheReg != nil {
 		Log.Debugf("will drop cache on: %v, current cache size: %v", c.nextExpireTime, c.cacheReg.Size())
-		if time.Now().Unix() > c.nextExpireTime {
+		if time.Now().Unix() > c.nextExpireTime && c.cacheReg.Size() > 0{
 			c.doExpire()
 			Log.Debugf("cache expire scheduled, current cache size: %v", c.cacheReg.Size())
 		}
@@ -88,7 +88,7 @@ func (c *Cache) expire() {
 func (c *Cache) doExpire(/*notify chan bool*/) {
 	now := time.Now().Unix()
 	for hang, found := c.cacheReg.GetMin()
-		found && now > hang.(cacheEntry).TimeExpire; {
+		found && now > hang.(cacheEntry).TimeExpire && c.cacheReg.Size() > 0; {
 
 		hangEntry := hang.(cacheEntry)
 		c.expireAction(hangEntry)

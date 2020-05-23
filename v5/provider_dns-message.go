@@ -271,7 +271,7 @@ func (provider *DMProvider) ObtainCurrentExternalIP(dnsResolver string) (string,
 			ipResolved = append(ip4s, ip16s...)
 
 			if len(ipResolved) == 0 {
-				Log.Errorf("Can't resolve endpoint %v from self and provided dns server: %v", h, dnsResolver)
+				Log.Errorf("Can't resolve endpoint %v from self or provided dns server: %v", h, dnsResolver)
 				return nil, fmt.Errorf("resolve failed during dailing")
 			}
 			ip := ipResolved[rand.Intn(len(ipResolved))]
@@ -293,6 +293,7 @@ func (provider *DMProvider) ObtainCurrentExternalIP(dnsResolver string) (string,
 		httpResp, err := client.Do(httpReq)
 		if err != nil {
 			Log.Errorf("http api call failed: %v", err)
+			provider.client.CloseIdleConnections()
 			continue
 		}
 		if httpResp != nil {
@@ -446,6 +447,7 @@ func (provider DMProvider) dnsMessageQuery(msg *dns.Msg) (*dns.Msg, error) {
 	bytesMsg, err := msg.Pack()
 	if err != nil {
 		Log.Errorf("pack message error: %v", err)
+		return nil, err
 	}
 	lenOfBytes := len(bytesMsg)
 
@@ -457,6 +459,7 @@ func (provider DMProvider) dnsMessageQuery(msg *dns.Msg) (*dns.Msg, error) {
 	bytesMsg, err = msg.Pack()
 	if err != nil {
 		Log.Errorf("pack message error: %v", err)
+		return nil, err
 	}
 	Log.Debugf("request msg packed size: %v", len(bytesMsg))
 
@@ -583,10 +586,12 @@ func (provider DMProvider) parameterizedRequest(msg *dns.Msg) (*http.Request, er
 
 func (provider DMProvider) doHTTPRequest(cReq <-chan *http.Request, cRsp chan *http.Response) {
 	req := <-cReq
+
 	httpResp, err := provider.client.Do(req)
 
 	if err != nil {
 		Log.Errorf("HttpRequest Error: %v", err)
+		provider.client.CloseIdleConnections()
 		cRsp <- nil
 	} else {
 		logHttpResp := func() {
