@@ -23,7 +23,7 @@ You may retrieve binaries from [the releases page][releases], or install using
 `go get`:
 
 ```
-go get -u github.com/tinkernels/doh-proxy
+go get -u github.com/tinkernels/doh-proxy/v5
 ```
 
 **systemd unit file sample**
