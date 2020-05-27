@@ -293,7 +293,6 @@ func (provider *DMProvider) ObtainCurrentExternalIP(dnsResolver string) (string,
 		httpResp, err := client.Do(httpReq)
 		if err != nil {
 			Log.Errorf("http api call failed: %v", err)
-			provider.client.CloseIdleConnections()
 			continue
 		}
 		if httpResp != nil {
@@ -371,7 +370,7 @@ func (provider DMProvider) urlParamsQuery(msg *dns.Msg) (*dns.Msg, error) {
 		return nil, err
 	}
 
-	httpResp, err := provider.fireDoHRequest(httpReq)
+	httpResp, err := provider.doHTTPRequest(httpReq)
 	if err != nil {
 		return nil, err
 	}
@@ -493,7 +492,7 @@ func (provider DMProvider) dnsMessageQuery(msg *dns.Msg) (*dns.Msg, error) {
 	}
 	Log.Debugf("http url: %v <- size: %v", httpReq.URL, len([]byte(httpReq.URL.String())))
 
-	httpResp, err := provider.fireDoHRequest(httpReq)
+	httpResp, err := provider.doHTTPRequest(httpReq)
 	if err != nil {
 		return nil, err
 	}
@@ -584,15 +583,13 @@ func (provider DMProvider) parameterizedRequest(msg *dns.Msg) (*http.Request, er
 	return httpReq, nil
 }
 
-func (provider DMProvider) doHTTPRequest(cReq <-chan *http.Request, cRsp chan *http.Response) {
-	req := <-cReq
+func (provider DMProvider) doHTTPRequest(req *http.Request) (rsp *http.Response, err error) {
 
 	httpResp, err := provider.client.Do(req)
 
 	if err != nil {
 		Log.Errorf("HttpRequest Error: %v", err)
-		provider.client.CloseIdleConnections()
-		cRsp <- nil
+		return nil, fmt.Errorf("HttpRequest Error: %v", err)
 	} else {
 		logHttpResp := func() {
 			headerKV := httpResp.Header
@@ -602,94 +599,69 @@ func (provider DMProvider) doHTTPRequest(cReq <-chan *http.Request, cRsp chan *h
 		switch httpResp.StatusCode {
 		case 301:
 			// follow 301 redirect once.
-			Log.Warnf("301 Moved Permanently.")
+			Log.Warnf("301 Moved Permanently")
 			newLocation := httpResp.Header.Get("Location")
 			logHttpResp()
 			newUrl, err := url.Parse(newLocation)
 			if err != nil {
 				Log.Warnf("parse 301 location error: %v", err)
-				cRsp <- nil
-				break
+				return nil, err
 			}
 			// if no dns parameter, give up.
 			// refer: https://developers.google.com/speed/public-dns/docs/doh
 			dnsQ := newUrl.Query().Get("dns")
 			if dnsQ == "" {
-				Log.Warnf("301 location invalid.")
-				cRsp <- nil
-				break
+				Log.Warnf("301 location invalid")
+				return nil, fmt.Errorf("301 location invalid")
 			}
 			req.URL = newUrl
-			reqCh := make(chan *http.Request)
-			provider.doHTTPRequest(reqCh, cRsp)
 			Log.Debugf("will try follow redirect url: %v", newUrl)
-			reqCh <- req
-			return
+			return provider.doHTTPRequest(req)
 		case 400:
-			Log.Errorf("400 Bad Request: may be invalid DNS request.")
+			errStr := "400 Bad Request: may be invalid DNS request"
+			Log.Errorf(errStr)
 			logHttpResp()
-			cRsp <- nil
-			break
+			return nil, fmt.Errorf(errStr)
 		case 413:
-			Log.Errorf("413 Payload Too Large")
+			errStr := "413 Payload Too Large"
+			Log.Errorf(errStr)
 			logHttpResp()
-			cRsp <- nil
-			break
+			return nil, fmt.Errorf(errStr)
 		case 414:
-			Log.Errorf("414 URI Too Long")
+			errStr := "414 URI Too Long"
+			Log.Errorf(errStr)
 			logHttpResp()
-			cRsp <- nil
-			break
+			return nil, fmt.Errorf(errStr)
 		case 415:
-			Log.Errorf("415 Unsupported Media Type: " +
-				"The POST body did not have an application/dns-message Content-Type header.")
+			errStr := "415 Unsupported Media Type: " +
+				"The POST body did not have an application/dns-message Content-Type header"
+			Log.Errorf(errStr)
 			logHttpResp()
-			cRsp <- nil
-			break
+			return nil, fmt.Errorf(errStr)
 		case 429:
-			Log.Errorf("429 Too Many Requests: The client has sent too many requests in a given amount of time")
+			errStr := "429 Too Many Requests: The client has sent too many requests in a given amount of time"
+			Log.Errorf(errStr)
 			logHttpResp()
-			cRsp <- nil
-			break
+			return nil, fmt.Errorf(errStr)
 		case 500:
-			Log.Errorf("500 Internal Server Error")
+			errStr := "500 Internal Server Error"
+			Log.Errorf(errStr)
 			logHttpResp()
-			cRsp <- nil
-			break
+			return nil, fmt.Errorf(errStr)
 		case 501:
-			Log.Errorf("501 Not Implemented: " +
-				"Only GET and POST methods are implemented, other methods get this error.")
+			errStr := "501 Not Implemented: " +
+				"Only GET and POST methods are implemented, other methods get this error"
+			Log.Errorf(errStr)
 			logHttpResp()
-			cRsp <- nil
-			break
+			return nil, fmt.Errorf(errStr)
 		case 502:
-			Log.Errorf("502 Bad Gateway: The DoH service could not contact DNS resolvers.")
+			errStr := "502 Bad Gateway: The DoH service could not contact DNS resolvers"
+			Log.Errorf(errStr)
 			logHttpResp()
-			cRsp <- nil
-			break
+			return nil, fmt.Errorf(errStr)
 		default:
-			cRsp <- httpResp
-			break
+			return httpResp, nil
 		}
-	}
-}
-
-func (provider DMProvider) fireDoHRequest(req *http.Request) (*http.Response, error) {
-	cReq := make(chan *http.Request)
-	cRsp := make(chan *http.Response)
-
-	defer close(cReq)
-	defer close(cRsp)
-
-	go provider.doHTTPRequest(cReq, cRsp)
-	cReq <- req
-
-	httpResp := <-cRsp
-
-	if httpResp == nil {
-		return nil, errors.New("HttpRequest Error occured")
-	} else {
-		return httpResp, nil
 	}
 }
 

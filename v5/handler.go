@@ -1,8 +1,10 @@
 package dohProxy
 
 import (
+	"fmt"
 	"github.com/miekg/dns"
 	"time"
+	"github.com/panjf2000/ants/v2"
 )
 
 // HandlerOptions specifies options to be used when instantiating a handler
@@ -16,6 +18,13 @@ type Handler struct {
 	provider          Provider
 	hostsFileProvider Provider
 	cache             *Cache
+	pool              *ants.PoolWithFunc
+}
+
+type ctxParamsPoolFunc struct {
+	req  *dns.Msg
+	resp chan *dns.Msg
+	err  error
 }
 
 // NewHandler creates a new Handler
@@ -25,6 +34,17 @@ func NewHandler(provider Provider, options *HandlerOptions) *Handler {
 		provider:          provider,
 		hostsFileProvider: NewHostsFileProvider(),
 	}
+	p, _ := ants.NewPoolWithFunc(128, func(payload interface{}) {
+		ctx, ok := payload.(*ctxParamsPoolFunc)
+		if !ok {
+			ctx.err = fmt.Errorf("cast pool func context failed")
+			return
+		}
+		resp, err := handler.provider.Query(ctx.req)
+		ctx.err = err
+		ctx.resp <- resp
+	})
+	handler.pool = p
 	if options.Cache {
 		handler.cache = NewCache()
 	}
@@ -123,14 +143,19 @@ func (h *Handler) AnswerByHostsFile(writer *dns.ResponseWriter, ctx *writerCtx) 
 }
 
 func (h *Handler) AnswerByDoH(writer *dns.ResponseWriter, ctx *writerCtx) {
-
-	msgR, err := h.provider.Query(ctx.msg)
-	if err != nil {
+    ctxP := &ctxParamsPoolFunc{req: ctx.msg, resp: make(chan *dns.Msg)}
+	if err := h.pool.Invoke(ctxP); err != nil{
 		Log.Errorf("dns-message provider failed: %v", err)
 		ctx.isAnsweredCh <- false
 		return
 	}
-	ctx.msg = msgR
+
+	if ctxP.err != nil{
+		Log.Errorf("query failed: %v", ctxP.err)
+		ctx.isAnsweredCh <- false
+		return
+	}
+	ctx.msg = <- ctxP.resp
 	ctx.isCache = false
 	go h.TryWriteAnswer(writer, ctx)
 }
