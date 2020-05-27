@@ -128,7 +128,7 @@ func configHTTPClient(provider *DMProvider) error {
 	}
 
 	keepAliveTimeout := 300 * time.Second
-	timeout := 15 * time.Second
+	timeout := 9 * time.Second
 
 	dialer := &net.Dialer{
 		Timeout:   timeout,
@@ -240,7 +240,7 @@ func (provider *DMProvider) ObtainCurrentExternalIP(dnsResolver string) (string,
 	}
 
 	keepAliveTimeout := 300 * time.Second
-	timeout := 15 * time.Second
+	timeout := 9 * time.Second
 
 	dialer := &net.Dialer{
 		Timeout:   timeout,
@@ -293,6 +293,7 @@ func (provider *DMProvider) ObtainCurrentExternalIP(dnsResolver string) (string,
 		httpResp, err := client.Do(httpReq)
 		if err != nil {
 			Log.Errorf("http api call failed: %v", err)
+			client.CloseIdleConnections()
 			continue
 		}
 		if httpResp != nil {
@@ -589,6 +590,7 @@ func (provider DMProvider) doHTTPRequest(req *http.Request) (rsp *http.Response,
 
 	if err != nil {
 		Log.Errorf("HttpRequest Error: %v", err)
+		provider.client.CloseIdleConnections()
 		return nil, fmt.Errorf("HttpRequest Error: %v", err)
 	} else {
 		logHttpResp := func() {
