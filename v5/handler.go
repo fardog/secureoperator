@@ -3,8 +3,14 @@ package dohProxy
 import (
 	"fmt"
 	"github.com/miekg/dns"
+	"sync"
 	"time"
 	"github.com/panjf2000/ants/v2"
+)
+
+var (
+	isSerialMode bool
+	serialLock   sync.Mutex
 )
 
 // HandlerOptions specifies options to be used when instantiating a handler
@@ -95,6 +101,16 @@ func (h *Handler) Handle(writer dns.ResponseWriter, msg *dns.Msg) {
 		}
 	}
 
+	if isSerialMode {
+		waitBegin := time.Now().Unix()
+		serialLock.Lock()
+		defer serialLock.Unlock()
+		if time.Now().Unix() > waitBegin+10 {
+			Log.Errorf("timeout due to wait lock")
+			return
+		}
+	}
+
 	go h.AnswerByDoH(&writer, ctx)
 	if <-isAnsweredCh {
 		Log.Infof("resolved from DoH: %v, cost time: %v",
@@ -102,6 +118,10 @@ func (h *Handler) Handle(writer dns.ResponseWriter, msg *dns.Msg) {
 		return
 	}
 
+	if !isSerialMode {
+		isSerialMode = true
+		Log.Infof("enter serial mode.")
+	}
 	dns.HandleFailed(writer, msg)
 }
 
@@ -122,6 +142,10 @@ func (h *Handler) TryWriteAnswer(writer *dns.ResponseWriter, ctx *writerCtx) {
 			ctx.isAnsweredCh <- false
 		} else {
 			ctx.isAnsweredCh <- true
+			if isSerialMode && !ctx.isCache {
+				isSerialMode = false
+				Log.Infof("leave serial mode.")
+			}
 			Log.Debugf("Successfully write response message")
 		}
 	} else {
