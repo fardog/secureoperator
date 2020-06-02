@@ -128,7 +128,7 @@ func configHTTPClient(provider *DMProvider) error {
 	}
 
 	keepAliveTimeout := 300 * time.Second
-	timeout := 9 * time.Second
+	timeout := 15 * time.Second
 
 	dialer := &net.Dialer{
 		Timeout:   timeout,
@@ -240,7 +240,7 @@ func (provider *DMProvider) ObtainCurrentExternalIP(dnsResolver string) (string,
 	}
 
 	keepAliveTimeout := 300 * time.Second
-	timeout := 9 * time.Second
+	timeout := 15 * time.Second
 
 	dialer := &net.Dialer{
 		Timeout:   timeout,

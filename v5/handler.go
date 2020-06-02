@@ -3,19 +3,24 @@ package dohProxy
 import (
 	"fmt"
 	"github.com/miekg/dns"
-	"sync"
-	"time"
 	"github.com/panjf2000/ants/v2"
+	"time"
+)
+
+const (
+	queryExpireDuration = time.Second * 10
+	concurrentPoolSize  = 128
 )
 
 var (
-	isSerialMode bool
-	serialLock   sync.Mutex
+	isSerialMode     bool
+	serialTaskNotify chan bool
 )
 
 // HandlerOptions specifies options to be used when instantiating a handler
 type HandlerOptions struct {
-	Cache bool
+	Cache  bool
+	NoAAAA bool
 }
 
 // Handler represents a DNS handler
@@ -33,6 +38,14 @@ type ctxParamsPoolFunc struct {
 	err  error
 }
 
+type writerCtx struct {
+	msg           *dns.Msg
+	isAnsweredCh  chan bool
+	isCache       bool
+	edns0SubnetIn dns.EDNS0_SUBNET
+	receivedTime  time.Time
+}
+
 // NewHandler creates a new Handler
 func NewHandler(provider Provider, options *HandlerOptions) *Handler {
 	handler := &Handler{
@@ -40,7 +53,7 @@ func NewHandler(provider Provider, options *HandlerOptions) *Handler {
 		provider:          provider,
 		hostsFileProvider: NewHostsFileProvider(),
 	}
-	p, _ := ants.NewPoolWithFunc(128, func(payload interface{}) {
+	p, _ := ants.NewPoolWithFunc(concurrentPoolSize, func(payload interface{}) {
 		ctx, ok := payload.(*ctxParamsPoolFunc)
 		if !ok {
 			ctx.err = fmt.Errorf("cast pool func context failed")
@@ -49,20 +62,14 @@ func NewHandler(provider Provider, options *HandlerOptions) *Handler {
 		resp, err := handler.provider.Query(ctx.req)
 		ctx.err = err
 		ctx.resp <- resp
-	})
+	},
+		ants.WithLogger(Log))
 	handler.pool = p
 	if options.Cache {
 		handler.cache = NewCache()
 	}
+	handler.initSerialMode()
 	return handler
-}
-
-type writerCtx struct {
-	msg           *dns.Msg
-	isAnsweredCh  chan bool
-	isCache       bool
-	edns0SubnetIn dns.EDNS0_SUBNET
-	receivedTime  time.Time
 }
 
 // Handle handles a DNS request
@@ -101,12 +108,13 @@ func (h *Handler) Handle(writer dns.ResponseWriter, msg *dns.Msg) {
 		}
 	}
 
-	if isSerialMode {
-		waitBegin := time.Now().Unix()
-		serialLock.Lock()
-		defer serialLock.Unlock()
-		if time.Now().Unix() > waitBegin+10 {
-			Log.Errorf("timeout due to wait lock")
+	if isSerialMode && serialTaskNotify != nil {
+		select {
+		case <-serialTaskNotify:
+			break
+		case <-time.After(queryExpireDuration):
+			Log.Errorf("timeout for waiting serial task channel.")
+			dns.HandleFailed(writer, msg)
 			return
 		}
 	}
@@ -119,10 +127,18 @@ func (h *Handler) Handle(writer dns.ResponseWriter, msg *dns.Msg) {
 	}
 
 	if !isSerialMode {
-		isSerialMode = true
-		Log.Infof("enter serial mode.")
+		h.initSerialMode()
 	}
 	dns.HandleFailed(writer, msg)
+}
+
+func (h *Handler) initSerialMode() {
+	isSerialMode = true
+	if serialTaskNotify == nil {
+		serialTaskNotify = make(chan bool)
+	}
+	go func() { serialTaskNotify <- true }()
+	Log.Infof("enter serial mode.")
 }
 
 func (h *Handler) TryWriteAnswer(writer *dns.ResponseWriter, ctx *writerCtx) {
@@ -142,8 +158,10 @@ func (h *Handler) TryWriteAnswer(writer *dns.ResponseWriter, ctx *writerCtx) {
 			ctx.isAnsweredCh <- false
 		} else {
 			ctx.isAnsweredCh <- true
-			if isSerialMode && !ctx.isCache {
+			if isSerialMode && !ctx.isCache &&
+				!(h.options.NoAAAA && ctx.msg.Question[0].Qtype == dns.TypeAAAA) {
 				isSerialMode = false
+				serialTaskNotify = nil
 				Log.Infof("leave serial mode.")
 			}
 			Log.Debugf("Successfully write response message")
@@ -167,14 +185,14 @@ func (h *Handler) AnswerByHostsFile(writer *dns.ResponseWriter, ctx *writerCtx) 
 }
 
 func (h *Handler) AnswerByDoH(writer *dns.ResponseWriter, ctx *writerCtx) {
-    ctxP := &ctxParamsPoolFunc{req: ctx.msg, resp: make(chan *dns.Msg)}
-	if err := h.pool.Invoke(ctxP); err != nil{
+	ctxP := &ctxParamsPoolFunc{req: ctx.msg, resp: make(chan *dns.Msg)}
+	if err := h.pool.Invoke(ctxP); err != nil {
 		Log.Errorf("dns-message provider failed: %v", err)
 		ctx.isAnsweredCh <- false
 		return
 	}
 
-	if ctxP.err != nil{
+	if ctxP.err != nil {
 		Log.Errorf("query failed: %v", ctxP.err)
 		ctx.isAnsweredCh <- false
 		return
@@ -182,4 +200,7 @@ func (h *Handler) AnswerByDoH(writer *dns.ResponseWriter, ctx *writerCtx) {
 	ctx.msg = <- ctxP.resp
 	ctx.isCache = false
 	go h.TryWriteAnswer(writer, ctx)
+	if isSerialMode && serialTaskNotify != nil {
+		go func(){ serialTaskNotify <- true}()
+	}
 }

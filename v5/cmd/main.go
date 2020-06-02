@@ -175,7 +175,7 @@ specify multiple as:
 	if err != nil {
 		log.Fatal(err)
 	}
-	options := &proxy.HandlerOptions{Cache: *cacheFlag}
+	options := &proxy.HandlerOptions{Cache: *cacheFlag, NoAAAA: *noAAAAFlag}
 	handler := proxy.NewHandler(provider, options)
 
 	dns.HandleFunc(".", handler.Handle)
