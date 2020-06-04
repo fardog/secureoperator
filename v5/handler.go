@@ -158,13 +158,31 @@ func (h *Handler) TryWriteAnswer(writer *dns.ResponseWriter, ctx *writerCtx) {
 			ctx.isAnsweredCh <- false
 		} else {
 			ctx.isAnsweredCh <- true
+			Log.Debugf("Successfully write response message")
 			if isSerialMode && !ctx.isCache &&
 				!(h.options.NoAAAA && ctx.msg.Question[0].Qtype == dns.TypeAAAA) {
-				isSerialMode = false
-				serialTaskNotify = nil
-				Log.Infof("leave serial mode.")
+				// drain the waiting queries.
+				go func() {
+					Log.Infof("will drain the waiting queries before leaving serial mode.")
+					func() {
+						count := 0
+						for {
+							select {
+							case serialTaskNotify <- true:
+								count ++
+								break
+							default:
+								Log.Infof("drained queries count: %d", count)
+								return
+							}
+						}
+					}()
+					isSerialMode = false
+					serialTaskNotify = nil
+					Log.Infof("leave serial mode.")
+				}()
+
 			}
-			Log.Debugf("Successfully write response message")
 		}
 	} else {
 		ctx.isAnsweredCh <- false
@@ -197,10 +215,10 @@ func (h *Handler) AnswerByDoH(writer *dns.ResponseWriter, ctx *writerCtx) {
 		ctx.isAnsweredCh <- false
 		return
 	}
-	ctx.msg = <- ctxP.resp
+	ctx.msg = <-ctxP.resp
 	ctx.isCache = false
 	go h.TryWriteAnswer(writer, ctx)
 	if isSerialMode && serialTaskNotify != nil {
-		go func(){ serialTaskNotify <- true}()
+		go func() { serialTaskNotify <- true }()
 	}
 }
