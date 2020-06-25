@@ -21,15 +21,14 @@ DNS-over-HTTPS servers.
 
 **docker**
 ```shell
-docker run -d --name doh-proxy -p 53:53 -p 53:53/udp researchiteng/doh-proxy
+docker run -d --name doh-proxy -p 53:53 -p 53:53/udp <registry>/doh-proxy
 ```
 Notes:
-- In future, docker registry might move from researchiteng to **tinkernels**.
+- In future, docker registry might be **tinkernels**.
 - The default parameters are the ones below.
 - A more advanced run example, with eventual different params or additional capabilities:      
 ```shell
-docker run --name doh-proxy --cap-add=NET_ADMIN -p 53:53 -p 53:53/udp researchiteng/#https://github.com/pi-hole/docker-pi-hole#note-on-capabilities
-#docker run -p 53:53 --name doh --cap-add=NET_ADMIN --cap-add=CAP_NET_BIND_SERVICE --cap-add=NET_RAW doh-proxy -google -http2 -endpoint "https://dns.google/resolve"  -endpoint-ips "8.8.8.8,8.8.4.4" -edns-subnet auto -listen 127.0.0.1:53 -no-ipv6 -cache=true -loglevel info
+docker run -d -p 53:53 -p 53:53/udp <registry>/doh-proxy --name doh-proxy --cap-add=NET_ADMIN --cap-add=CAP_NET_BIND_SERVICE --cap-add=NET_RAW doh-proxy -google -http2 -endpoint "https://dns.google/resolve"  -endpoint-ips "8.8.8.8,8.8.4.4" -edns-subnet auto -listen 127.0.0.1:53 -no-ipv6 -cache=true -loglevel info
 ```      
 Should there be perms issues, see: https://github.com/pi-hole/docker-pi-hole#note-on-capabilities for eventual more cappabilities, like:
 `--cap-add=NET_ADMIN --cap-add=CAP_NET_BIND_SERVICE --cap-add=NET_RAW`
