@@ -38,6 +38,11 @@ var (
 		false,
 		fmt.Sprintf(`Alternative google url scheme for dns.google/resolve.`),
 	)
+	jsonFlag = flag.Bool(
+		"json",
+		false,
+		fmt.Sprintf(`JSON API for DoH dns.google/resolve.`),
+	)
 	// resolution of the Google DNS endpoint; the interaction of these values is
 	// somewhat complex, and is further explained in the help message.
 	endpointFlag = flag.String(
@@ -168,6 +173,7 @@ specify multiple as:
 		CACertFilePath:  *cacertFlag,
 		NoAAAA:          *noAAAAFlag,
 		Alternative:     *googleFlag,
+		JSONAPI:         *jsonFlag,
 		DnsResolver:     *dnsResolverFlag,
 	}
 
