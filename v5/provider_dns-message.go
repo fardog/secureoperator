@@ -457,7 +457,7 @@ func (provider DMProvider) dnsMessageQuery(msg *dns.Msg) (*dns.Msg, error) {
 	}
 	lenOfBytes := len(bytesMsg)
 
-	paddingLength := CalculatePaddingLength(lenOfBytes, 128, 128)
+	paddingLength := CalculatePaddingLength(lenOfBytes, 32, 16)
 	if paddingLength > 0 {
 		pad(paddingLength)
 	}
@@ -574,7 +574,7 @@ func (provider DMProvider) parameterizedRequest(msg *dns.Msg) (*http.Request, er
 
 	lengthOfUrlPreAllocated := len([]byte((httpReq.URL.String()) + PaddingParameter + "&="))
 
-	paddingLength := CalculatePaddingLength(lengthOfUrlPreAllocated, 128, 64)
+	paddingLength := CalculatePaddingLength(lengthOfUrlPreAllocated, 32, 16)
 	// block length padding 128x total length.
 	if paddingLength > 0 {
 		qry.Add(PaddingParameter, GenerateUrlSafeString(paddingLength))
@@ -906,7 +906,7 @@ func (provider DMProvider) parameterizedRequest2(msg *dns.Msg) (*http.Request, e
 
 	lengthOfUrlPreAllocated := len([]byte((httpReq.URL.String()) + PaddingParameter + "&="))
 
-	paddingLength := CalculatePaddingLength(lengthOfUrlPreAllocated, 64, 32)
+	paddingLength := CalculatePaddingLength(lengthOfUrlPreAllocated, 32, 16)
 	// block length padding 128x total length.
 	if paddingLength > 0 {
 		qry.Add(PaddingParameter, GenerateUrlSafeString(paddingLength))
