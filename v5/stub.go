@@ -180,35 +180,35 @@ func (stub Stub) generateMsgFromReq(r *http.Request) (*dns.Msg, error) {
 		ip = net.ParseIP(qSubnet)
 	}
 	if err != nil || ip == nil {
-		Log.Errorf("question subnet invalid: %v", itype)
-		return nil, fmt.Errorf("question type invalid")
-	}
-	subnet := new(dns.EDNS0_SUBNET)
-	subnet.Family = 0
-	subnet.Code = dns.EDNS0SUBNET
-	subnet.SourceScope = 0
-	subnet.Address = ip
-	is_ip4 := ip.To4() != nil
-	ones_ := 32
-	if is_ip4 {
-		subnet.Family = 1
-	} else {
-		subnet.Family = 2
-	}
-	if ipnet != nil {
-		ones_, _ = ipnet.Mask.Size()
-		subnet.SourceNetmask = uint8(ones_)
-	} else {
+		Log.Debugf("question subnet invalid: %v", qSubnet)
+	}else {
+		subnet := new(dns.EDNS0_SUBNET)
+		subnet.Family = 0
+		subnet.Code = dns.EDNS0SUBNET
+		subnet.SourceScope = 0
+		subnet.Address = ip
+		is_ip4 := ip.To4() != nil
+		ones_ := 32
 		if is_ip4 {
-			subnet.SourceNetmask = 32
+			subnet.Family = 1
 		} else {
-			subnet.SourceNetmask = 128
+			subnet.Family = 2
 		}
+		if ipnet != nil {
+			ones_, _ = ipnet.Mask.Size()
+			subnet.SourceNetmask = uint8(ones_)
+		} else {
+			if is_ip4 {
+				subnet.SourceNetmask = 32
+			} else {
+				subnet.SourceNetmask = 128
+			}
+		}
+		ReplaceEDNS0Subnet(qMsg, subnet)
 	}
 
 	Log.Infof("will query name: %v, type: %v, client_subnet: %v", qName, qType, qSubnet)
 
-	ReplaceEDNS0Subnet(qMsg, subnet)
 	return qMsg, nil
 }
 
