@@ -42,7 +42,16 @@ var (
 		"Log level, one of: debug, info, warn, error, fatal, panic",
 	)
 	cacheFlag = flag.Bool("cache", true, "Cache the dns answers")
+	versionFlag = flag.Bool(
+		"version",
+		false,
+		"Print version info",
+	)
 )
+
+func printVersion(){
+	fmt.Println("v5.0.1")
+}
 
 func serve(net <- chan string) {
 	listenNet := <- net
@@ -68,6 +77,11 @@ func main() {
 		flag.PrintDefaults()
 	}
 	flag.Parse()
+
+	if *versionFlag {
+		printVersion()
+		return
+	}
 
 	// seed the global random number generator
 	rand.Seed(time.Now().UTC().UnixNano())
