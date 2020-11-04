@@ -22,19 +22,19 @@ var log = proxy.Log
 
 var (
 	listenAddressFlag = flag.String(
-		"listen", ":53", "listen address, as `[host]:port`",
+		"listen", ":53", "Listen address, as `[host]:port`",
 	)
 	// resolution of the Google DNS endpoint; the interaction of these values is
 	// somewhat complex, and is further explained in the help message.
 	upstreamAddrFlag = flag.String(
 		"upstream-addr",
 		gdnsEndpoint,
-		"upstream dns server",
+		"Upstream dns server",
 	)
 	upstreamProtocolFlag = flag.String(
 		"upstream-protocol",
-		gdnsEndpoint,
-		"upstream dns server protocol, e.g. tcp",
+		"tcp",
+		"Upstream dns server protocol, tcp or udp",
 	)
 	logLevelFlag = flag.String(
 		"loglevel",
@@ -72,7 +72,7 @@ func serve(net <- chan string) {
 func main() {
 	flag.Usage = func() {
 		_, exe := filepath.Split(os.Args[0])
-		_, _ = fmt.Fprint(os.Stderr, "A DNS-protocol stub server for DNS-over-HTTPS service.\n\n")
+		_, _ = fmt.Fprint(os.Stderr, "A DoH stub server.\n\n")
 		_, _ = fmt.Fprintf(os.Stderr, "Usage:\n\n  %s [options]\n\nOptions:\n\n", exe)
 		flag.PrintDefaults()
 	}

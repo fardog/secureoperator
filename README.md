@@ -47,7 +47,7 @@ Then either run the binary you downloaded, or the built package with:
 ```
 make release
 ```
-Information on the usage of these options is available with
+Information on the usage of program options is available with
 ```shell
 __DOH_PROXY_PROGRAM_PATH__ --help
 
@@ -60,47 +60,75 @@ Usage:
 Options:
 
   -cacert string
-    	CA certificate for TLS establishment
+        CA certificate for TLS establishment
   -cache
-    	Cache the dns answers (default true)
+        Cache the dns answers (default true)
   -dns-resolver string
-    	dns resolver for retrieve ip of DoH enpoint host, e.g. "8.8.8.8:53";
+        DNS resolver for retrieve ip of DoH enpoint host, e.g. "8.8.8.8:53";
   -edns-subnet string
-    	Specify a subnet to be sent in the edns0-client-subnet option;
-    	take your own risk of privacy to use this option;
-    	no: will not use edns_subnet;
-    	auto: will use your current external IP address;
-    	net/mask: will use specified subnet, e.g. 66.66.66.66/24.
-    	        (default "auto")
+        Specify a subnet to be sent in the edns0-client-subnet option;
+        take your own risk of privacy to use this option;
+        no: will not use edns_subnet;
+        auto: will use your current external IP address;
+        net/mask: will use specified subnet, e.g. 66.66.66.66/24.
+                (default "auto")
   -endpoint string
-    	DNS-over-HTTPS endpoint url (default "https://dns.google/dns-query")
+        DNS-over-HTTPS endpoint url (default "https://dns.google/dns-query")
   -endpoint-ips string
-    	IPs of the DNS-over-HTTPS endpoint; if provided, endpoint lookup is
-    	skipped, the TLS establishment will direct hit the "endpoint-ips". Comma
-    	separated with no spaces; e.g. "8.8.8.8,8.8.4.4". One server is
-    	randomly chosen for each request, failed requests are not retried.
+        IPs of the DNS-over-HTTPS endpoint; if provided, endpoint lookup is
+        skipped, the TLS establishment will direct hit the "endpoint-ips". Comma
+        separated with no spaces; e.g. "74.125.28.139,74.125.28.102". One server is
+        randomly chosen for each request, failed requests are not retried.
   -google
-    	Alternative google url scheme for dns.google/resolve.
+        Alternative google url scheme like dns.google/resolve.
   -headers value
-    	Additional headers to be sent with http requests, as Key=Value; specify
-    	multiple as:
-    	    -header Key-1=Value-1-1 -header Key-1=Value1-2 -header Key-2=Value-2
+        Additional headers to be sent with http requests, as Key=Value; specify
+        multiple as:
+            -header Key-1=Value-1-1 -header Key-1=Value1-2 -header Key-2=Value-2
   -http2
-    	Using http2 for query connection
+        Using http2 for query connection
+  -json
+        JSON API for DoH like dns.google/resolve.
   -listen [host]:port
-    	listen address, as [host]:port (default ":53")
+        listen address, as [host]:port (default ":53")
   -loglevel string
-    	Log level, one of: debug, info, warn, error, fatal, panic (default "info")
+        Log level, one of: debug, info, warn, error, fatal, panic (default "info")
   -no-ipv6
-    	Reply all AAAA questions with a fake answer
+        Reply all AAAA questions with a fake answer
   -param value
-    	Additional query parameters to be sent with http requests, as key=value;
-    	specify multiple as:
-    	    -param key1=value1-1 -param key1=value1-2 -param key2=value2
+        Additional query parameters to be sent with http requests, as key=value;
+        specify multiple as:
+            -param key1=value1-1 -param key1=value1-2 -param key2=value2
   -tcp
-    	Listen on TCP (default true)
+        Listen on TCP (default true)
   -udp
-    	Listen on UDP (default true)
+        Listen on UDP (default true)
+  -version
+        Print version info
+```
+```shell
+__DOH_STUB_PROGRAM_PATH__ --help
+
+A DoH stub server.
+
+Usage:
+
+  doh-stub_macos-amd64 [options]
+
+Options:
+
+  -cache
+        Cache the dns answers (default true)
+  -listen [host]:port
+        Listen address, as [host]:port (default ":53")
+  -loglevel string
+        Log level, one of: debug, info, warn, error, fatal, panic (default "info")
+  -upstream-addr string
+        Upstream dns server (default "https://dns.google/dns-query")
+  -upstream-protocol string
+        Upstream dns server protocol, tcp or udp (default "tcp")
+  -version
+        Print version info
 ```
 
 **Note:** Running a service on port `53` requires administrative privileges on
