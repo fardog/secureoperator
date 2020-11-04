@@ -72,6 +72,8 @@ type DMProviderOptions struct {
 	// use https://dns.google/resolve like endpoint
 	Alternative bool
 
+	JSONAPI bool
+
 	// dns resolver for retrieve ip of DoH enpoint host
 	DnsResolver string
 
@@ -341,6 +343,10 @@ func (provider DMProvider) Query(msg *dns.Msg) (*dns.Msg, error) {
 		return provider.urlParamsQuery(msg)
 	}
 
+	if provider.opts.JSONAPI {
+		return provider.jsonQuery(msg)
+	}
+
 	return provider.dnsMessageQuery(msg)
 }
 
@@ -451,7 +457,7 @@ func (provider DMProvider) dnsMessageQuery(msg *dns.Msg) (*dns.Msg, error) {
 	}
 	lenOfBytes := len(bytesMsg)
 
-	paddingLength := CalculatePaddingLength(lenOfBytes, 128, 128)
+	paddingLength := CalculatePaddingLength(lenOfBytes, 32, 16)
 	if paddingLength > 0 {
 		pad(paddingLength)
 	}
@@ -568,7 +574,7 @@ func (provider DMProvider) parameterizedRequest(msg *dns.Msg) (*http.Request, er
 
 	lengthOfUrlPreAllocated := len([]byte((httpReq.URL.String()) + PaddingParameter + "&="))
 
-	paddingLength := CalculatePaddingLength(lengthOfUrlPreAllocated, 128, 64)
+	paddingLength := CalculatePaddingLength(lengthOfUrlPreAllocated, 32, 16)
 	// block length padding 128x total length.
 	if paddingLength > 0 {
 		qry.Add(PaddingParameter, GenerateUrlSafeString(paddingLength))
@@ -687,6 +693,7 @@ func (provider *DMProvider) GetIPsClosure(name string) (closure func() (ip4s []s
 			CACertFilePath:  provider.opts.CACertFilePath,
 			NoAAAA:          provider.opts.NoAAAA,
 			Alternative:     provider.opts.Alternative,
+			JSONAPI:         provider.opts.JSONAPI,
 			DnsResolver:     provider.opts.DnsResolver,
 		}
 		providerTmp, err := NewDMProvider(provider.endpoint, opts)
@@ -753,6 +760,204 @@ func (provider *DMProvider) GetIPsClosure(name string) (closure func() (ip4s []s
 		}
 		return ip4s, ip16s
 	}
+}
+
+func (provider DMProvider) jsonQuery(msg *dns.Msg) (*dns.Msg, error) {
+	// Return fake answer (empty) if NoAAAA option is on.
+	isAAAAQuestion := false
+	if provider.opts.NoAAAA {
+		for _, q := range msg.Question {
+			if q.Qtype == dns.TypeAAAA {
+				//msg.Question[i].Qtype = dns.TypeSOA
+				isAAAAQuestion = true
+				break
+			}
+		}
+		if isAAAAQuestion {
+			msgR := new(dns.Msg)
+			msgR.SetReply(msg)
+			return msgR, nil
+		}
+	}
+
+	Log.Debugf("Dns Question Msg: \n%v", msg)
+
+	httpReq, err := provider.parameterizedRequest2(msg)
+	if err != nil {
+		return nil, err
+	}
+
+	httpResp, err := provider.doHTTPRequest(httpReq)
+	if err != nil {
+		return nil, err
+	}
+	httpResp.Close = true
+	defer func() { _ = httpResp.Body.Close() }()
+
+	// dns.google/resolve return DNS Answer with no ID,
+	// call SetReply after unpack DNS Message.
+	json_ := new(JSONDNSResponse)
+	decoder := json.NewDecoder(httpResp.Body)
+	err = decoder.Decode(json_)
+	if err != nil && json_.Answer == nil && json_.Authority == nil {
+		headerKV := httpResp.Header
+		bodyBytes, _ := ioutil.ReadAll(httpResp.Body)
+		Log.Errorf("Error json decoding Header:\n%v\nError Body:\n%v", headerKV, string(bodyBytes))
+		return nil, fmt.Errorf("json decoding error")
+	}
+
+	rMsg := provider.obtainDMFromJSON(json_, msg)
+
+	Log.Debugf("Dns Answer Msg: \n%v", rMsg)
+
+	return rMsg, nil
+}
+
+// DNSRR represents a DNS record, part of a response to a DNSQuestion
+type DNSRR struct {
+	Name string `json:"name,omitempty"`
+	Type uint16 `json:"type,omitempty"`
+	TTL  uint32 `json:"TTL,omitempty"`
+	Data string `json:"data,omitempty"`
+}
+
+// GDNSRRs represents an array of GDNSRR objects
+type DNSRRs []DNSRR
+
+// RR transforms a DNSRR to a dns.RR
+func (r DNSRR) RR() (dns.RR, error) {
+	hdr := dns.RR_Header{Name: r.Name, Rrtype: r.Type, Class: dns.ClassINET, Ttl: r.TTL}
+	str := hdr.String() + r.Data
+	return dns.NewRR(str)
+}
+
+// DNSQuestion represents a DNS question to be resolved by a DNS server
+type DNSQuestion struct {
+	Name string `json:"name,omitempty"`
+	Type uint16 `json:"type,omitempty"`
+}
+type DNSQuestions []DNSQuestion
+
+// JSONDNSResponse represents a response from the Google DNS-over-HTTPS servers
+type JSONDNSResponse struct {
+	Status           int32        `json:"Status"`
+	TC               bool         `json:"TC"`
+	RD               bool         `json:"RD"`
+	RA               bool         `json:"RA"`
+	AD               bool         `json:"AD"`
+	CD               bool         `json:"CD"`
+	Question         DNSQuestions `json:"Question,omitempty"`
+	Answer           DNSRRs       `json:"Answer,omitempty"`
+	Authority        DNSRRs       `json:"Authority,omitempty"`
+	Additional       DNSRRs       `json:"Additional,omitempty"`
+	EDNSClientSubnet string       `json:"edns_client_subnet,omitempty"`
+	Comment          string       `json:"Comment,omitempty"`
+}
+
+func (provider DMProvider) parameterizedRequest2(msg *dns.Msg) (*http.Request, error) {
+	httpReq, err := http.NewRequest(http.MethodGet, provider.url.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	// set headers if provided; we don't merge these for now, as we don't set
+	// any headers by default
+	if provider.opts.Headers != nil {
+		httpReq.Header = provider.opts.Headers
+	}
+
+	httpReq.Header.Add("Accept", "application/json")
+
+	qry := httpReq.URL.Query()
+	dnsType := fmt.Sprintf("%v", msg.Question[0].Qtype)
+
+	qry.Add("name", msg.Question[0].Name)
+	qry.Add("type", dnsType)
+
+	// add additional query parameters
+	if provider.opts.QueryParameters != nil {
+		for k, vs := range provider.opts.QueryParameters {
+			for _, v := range vs {
+				qry.Add(k, v)
+			}
+		}
+	}
+
+	ednsSubnet := ""
+	if provider.opts.EDNSSubnet == "no" {
+		//ReplaceEDNS0Subnet(msg, nil)
+		Log.Debug("will not use EDNSSubnet.")
+	} else if provider.opts.EDNSSubnet == "auto" {
+		ednsSubnet = provider.autoSubnetGetter()
+	} else {
+		_, _, err := net.ParseCIDR(provider.opts.EDNSSubnet)
+		if err != nil {
+			Log.Debugf("specified subnet is not OK: %v", provider.opts.EDNSSubnet)
+		}
+		Log.Debugf("will use EDNSSubnet you specified: %v", provider.opts.EDNSSubnet)
+		ednsSubnet = provider.opts.EDNSSubnet
+	}
+
+	if ednsSubnet != "" {
+		qry.Add("edns_client_subnet", ednsSubnet)
+	}
+
+	httpReq.URL.RawQuery = qry.Encode()
+
+	lengthOfUrlPreAllocated := len([]byte((httpReq.URL.String()) + PaddingParameter + "&="))
+
+	paddingLength := CalculatePaddingLength(lengthOfUrlPreAllocated, 32, 16)
+	// block length padding 128x total length.
+	if paddingLength > 0 {
+		qry.Add(PaddingParameter, GenerateUrlSafeString(paddingLength))
+	}
+
+	httpReq.URL.RawQuery = qry.Encode()
+
+	lenQName := len([]byte(msg.Question[0].Name))
+	if lenQName > MaxBytesOfDNSName {
+		return nil, fmt.Errorf("name length of %v exceeds DNS name max length", lenQName)
+	}
+	Log.Debugf("http url: %v <- size %v", httpReq.URL, len([]byte(httpReq.URL.String())))
+	return httpReq, nil
+}
+
+func (provider DMProvider) obtainDMFromJSON(json_ *JSONDNSResponse, qMsg *dns.Msg) *dns.Msg {
+	rMsg := new (dns.Msg)
+	rMsg.Truncated = json_.TC
+	rMsg.RecursionDesired = json_.RD
+	rMsg.RecursionAvailable = json_.AD
+	rMsg.AuthenticatedData = json_.AD
+	rMsg.CheckingDisabled = json_.CD
+	rMsg.Rcode = int(json_.Status)
+
+	answers := transformRR(json_.Answer, "answer")
+	authorities := transformRR(json_.Authority, "authority")
+
+	if json_.Comment != "" {
+		Log.Infof(json_.Comment)
+	}
+
+	rMsg.Answer = answers
+	rMsg.Ns = authorities
+
+	msg_ := rMsg.SetReply(qMsg)
+	return msg_
+}
+
+// for a given []DNSRR, transform to dns.RR, logging if any errors occur
+func transformRR(rrs []DNSRR, logType string) []dns.RR {
+	var t []dns.RR
+
+	for _, r := range rrs {
+		if rr, err := r.RR(); err != nil {
+			Log.Errorln("unable to translate record rr", logType, r, err)
+		} else {
+			t = append(t, rr)
+		}
+	}
+
+	return t
 }
 
 func placeSubnetToMsg(subnet string, msg *dns.Msg) {

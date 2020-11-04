@@ -9,7 +9,7 @@ import (
 
 const (
 	queryExpireDuration = time.Second * 10
-	concurrentPoolSize  = 128
+	concurrentPoolSize  = 32
 )
 
 var (
@@ -114,7 +114,6 @@ func (h *Handler) Handle(writer dns.ResponseWriter, msg *dns.Msg) {
 			break
 		case <-time.After(queryExpireDuration):
 			Log.Errorf("timeout for waiting serial task channel.")
-			dns.HandleFailed(writer, msg)
 			return
 		}
 	}
@@ -129,7 +128,6 @@ func (h *Handler) Handle(writer dns.ResponseWriter, msg *dns.Msg) {
 	if !isSerialMode {
 		h.initSerialMode()
 	}
-	dns.HandleFailed(writer, msg)
 }
 
 func (h *Handler) initSerialMode() {

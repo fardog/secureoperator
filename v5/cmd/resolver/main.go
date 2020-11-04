@@ -36,7 +36,12 @@ var (
 	googleFlag = flag.Bool(
 		"google",
 		false,
-		fmt.Sprintf(`Alternative google url scheme for dns.google/resolve.`),
+		fmt.Sprintf(`Alternative google url scheme like dns.google/resolve.`),
+	)
+	jsonFlag = flag.Bool(
+		"json",
+		false,
+		fmt.Sprintf(`JSON API for DoH like dns.google/resolve.`),
 	)
 	// resolution of the Google DNS endpoint; the interaction of these values is
 	// somewhat complex, and is further explained in the help message.
@@ -93,9 +98,18 @@ net/mask: will use specified subnet, e.g. 66.66.66.66/24.
 	dnsResolverFlag = flag.String(
 		"dns-resolver",
 		"",
-		`dns resolver for retrieve ip of DoH enpoint host, e.g. "8.8.8.8:53";`,
+		`DNS resolver for retrieve ip of DoH enpoint host, e.g. "8.8.8.8:53";`,
 		)
+	versionFlag = flag.Bool(
+		"version",
+		false,
+		"Print version info",
+	)
 )
+
+func printVersion(){
+	fmt.Println("v5.0.1")
+}
 
 func serve(net <- chan string) {
 	listenNet := <- net
@@ -137,6 +151,11 @@ specify multiple as:
 	}
 	flag.Parse()
 
+	if *versionFlag {
+		printVersion()
+		return
+	}
+
 	// seed the global random number generator
 	rand.Seed(time.Now().UTC().UnixNano())
 
@@ -168,6 +187,7 @@ specify multiple as:
 		CACertFilePath:  *cacertFlag,
 		NoAAAA:          *noAAAAFlag,
 		Alternative:     *googleFlag,
+		JSONAPI:         *jsonFlag,
 		DnsResolver:     *dnsResolverFlag,
 	}
 
