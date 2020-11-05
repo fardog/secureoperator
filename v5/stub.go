@@ -6,6 +6,7 @@ import (
 	"net"
 	"net/http"
 	"strconv"
+	"time"
 )
 
 type Stub struct {
@@ -25,9 +26,9 @@ func (stub Stub) ensureConn() error {
 	if client == nil {
 		client = &dns.Client{
 			Net: stub.UpstreamProtocol,
-			ReadTimeout: 5,
-			WriteTimeout: 5,
-			DialTimeout: 5,
+			ReadTimeout: 5 * time.Second,
+			WriteTimeout: 5 * time.Second,
+			DialTimeout: 5 * time.Second,
 		}
 	}
 	if conn != nil {
