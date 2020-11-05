@@ -21,7 +21,7 @@ DNS-over-HTTPS servers.
 
 **docker**
 ```shell
-docker run -d --name doh-proxy -p 53:53 -p 53:53/udp <registry>/doh-proxy
+docker run -d --name doh-proxy -p 53:53 -p 53:53/udp tinkernels/doh-proxy
 ```
 Notes:
 - The default parameters are the ones below.
