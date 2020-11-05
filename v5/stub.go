@@ -80,7 +80,7 @@ func (stub Stub) answer(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	rMsg, err := stub.relay(q)
+	rMsg, err := stub.relay(q, false)
 	if err != nil {
 		Log.Errorf("error when querying upstream: %v", err)
 		w.Header().Add("content-type", "text/plain")
@@ -116,7 +116,7 @@ func (stub Stub) writeAnswer(rMsg *dns.Msg, w http.ResponseWriter) {
 	}
 }
 
-func (stub Stub) relay(msg *dns.Msg) (*dns.Msg, error) {
+func (stub Stub) relay(msg *dns.Msg, is_retry bool) (*dns.Msg, error) {
 	err := stub.ensureConn()
 	if err != nil {
 		client = nil
@@ -127,8 +127,13 @@ func (stub Stub) relay(msg *dns.Msg) (*dns.Msg, error) {
 	if err != nil {
 		client = nil
 		conn = nil
-		Log.Errorf("error when relaying query: %v", err)
-		return nil, err
+		// retry once.
+		if is_retry {
+			Log.Errorf("error when relaying query: %v", err)
+			return nil, err
+		}
+		Log.Infof("retrying query: %v", msg.Question[0].String())
+		return stub.relay(msg, true)
 	}
 	if stub.UseCache {
 		msgch := make(chan *dns.Msg)
