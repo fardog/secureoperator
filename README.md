@@ -21,7 +21,7 @@ DNS-over-HTTPS servers.
 
 **docker**
 ```shell
-docker run -d --name doh-proxy -p 53:53 -p 53:53/udp tinkernels/doh-proxy
+docker run -d -p 53:53 -p 53:53/udp --name doh-proxy  tinkernels/doh-proxy doh-proxy -google -http2 -endpoint "https://dns.google/resolve"  -endpoint-ips "8.8.8.8,8.8.4.4" -edns-subnet auto -listen 127.0.0.1:53 -no-ipv6 -cache=true -loglevel info
 ```
 Notes:
 - The default parameters are the ones below.
