@@ -29,7 +29,7 @@ var (
 	upstreamAddrFlag = flag.String(
 		"upstream-addr",
 		gdnsEndpoint,
-		"Upstream dns server",
+		"Upstream dns servers, comma seperated. e.g. 8.8.8.8[:53],8.8.4.4[:53]",
 	)
 	upstreamProtocolFlag = flag.String(
 		"upstream-protocol",

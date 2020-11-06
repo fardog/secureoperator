@@ -6,6 +6,7 @@ import (
 	"net"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -17,31 +18,60 @@ type Stub struct {
 }
 
 var (
-	client *dns.Client
-	conn   *dns.Conn
-	cache  *Cache
+	client      *dns.Client
+	conns       []*dns.Conn
+	connsAddrs  []string
+	nextConnIdx int = 0
+	cache       *Cache
 )
 
-func (stub Stub) ensureConn() error {
+func (stub Stub) ensureConn() (*dns.Conn, error) {
 	if client == nil {
 		client = &dns.Client{
-			Net: stub.UpstreamProtocol,
-			ReadTimeout: 5 * time.Second,
+			Net:          stub.UpstreamProtocol,
+			ReadTimeout:  5 * time.Second,
 			WriteTimeout: 5 * time.Second,
-			DialTimeout: 5 * time.Second,
+			DialTimeout:  5 * time.Second,
 		}
 	}
-	if conn != nil {
-		return nil
-	}
-	conn_, err := client.Dial(stub.UpstreamAddr)
+	c, err := turnAddrRoundRobin()
 	if err != nil {
 		Log.Errorf("connect to upstream server %v://%v failed: %v",
-			stub.UpstreamProtocol, stub.UpstreamAddr, err)
-		return err
+			stub.UpstreamProtocol, connsAddrs[nextConnIdx], err)
+		return nil, err
 	}
-	conn = conn_
-	return nil
+	return c, nil
+}
+
+func turnAddrRoundRobin() (*dns.Conn, error) {
+	nextConnIdx += 1
+	if nextConnIdx >= len(connsAddrs) {
+		nextConnIdx = 0
+	}
+
+	nextConnAddr := connsAddrs[nextConnIdx]
+	var nextConn  *dns.Conn
+	if len(conns) >= nextConnIdx+1 {
+		if conns[nextConnIdx] != nil {
+			nextConn = conns[nextConnIdx]
+		} else {
+			nextConn_, err := client.Dial(nextConnAddr)
+			if err != nil {
+				return nil, err
+			} else {
+				nextConn = nextConn_
+			}
+		}
+	}else{
+		nextConn_, err := client.Dial(nextConnAddr)
+		if err != nil {
+			return nil, err
+		} else {
+			nextConn = nextConn_
+			conns = append(conns, nextConn)
+		}
+	}
+	return nextConn, nil
 }
 
 func (stub Stub) answer(w http.ResponseWriter, r *http.Request) {
@@ -117,16 +147,16 @@ func (stub Stub) writeAnswer(rMsg *dns.Msg, w http.ResponseWriter) {
 }
 
 func (stub Stub) relay(msg *dns.Msg, is_retry bool) (*dns.Msg, error) {
-	err := stub.ensureConn()
+	c, err := stub.ensureConn()
 	if err != nil {
 		client = nil
-		conn = nil
+		conns = nil
 		return nil, fmt.Errorf("client connecting error")
 	}
-	rMsg, _, err := client.ExchangeWithConn(msg, conn)
+	rMsg, _, err := client.ExchangeWithConn(msg, c)
 	if err != nil {
 		client = nil
-		conn = nil
+		conns = nil
 		// retry once.
 		if is_retry {
 			Log.Errorf("error when relaying query: %v", err)
@@ -187,7 +217,7 @@ func (stub Stub) generateMsgFromReq(r *http.Request) (*dns.Msg, error) {
 	}
 	if err != nil || ip == nil {
 		Log.Debugf("question subnet invalid: %v", qSubnet)
-	}else {
+	} else {
 		subnet := new(dns.EDNS0_SUBNET)
 		subnet.Family = 0
 		subnet.Code = dns.EDNS0SUBNET
@@ -222,13 +252,40 @@ func (stub Stub) Run() {
 	if stub.UseCache {
 		cache = NewCache()
 	}
+
+	// get connection addresses.
+	addrs := strings.Split(stub.UpstreamAddr, ",")
+	for _, addr := range addrs {
+		if addr == "" {
+			continue
+		}
+		_, _, err := net.SplitHostPort(addr)
+		if err == nil {
+			connsAddrs = append(connsAddrs, addr)
+		} else {
+			ip := net.ParseIP(addr)
+			if ip == nil {
+				continue
+			}
+			connsAddrs = append(connsAddrs, net.JoinHostPort(ip.String(), "53"))
+		}
+	}
+
+	if len(connsAddrs) == 0 {
+		Log.Error("no valid upstream address.")
+		return
+	}
+
 	http.HandleFunc("/resolve", stub.answer)
 	Log.Infof("running stub server http://%v <--> %v://%v ...",
 		stub.ListenAddr, stub.UpstreamProtocol, stub.UpstreamAddr)
+
 	err := http.ListenAndServe(stub.ListenAddr, nil)
 	if err != nil {
 		Log.Fatalf("stub server running into error: %v", err)
 	}
-	_ = conn.Close()
+	for _, c := range conns {
+		_ = c.Close()
+	}
 	Log.Info("stopping stub server...")
 }
