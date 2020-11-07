@@ -18,12 +18,51 @@ type Stub struct {
 }
 
 var (
-	client      *dns.Client
-	conns       []*dns.Conn
-	connsAddrs  []string
-	nextConnIdx int = 0
-	cache       *Cache
+	client          *dns.Client
+	conns           []*dns.Conn
+	connsAddrs      []string
+	nextConnIdx     int = 0
+	cache           *Cache
+	subnetException map[string]bool
 )
+
+func (stub Stub) addSubnetException(){
+	subnetException = make(map[string]bool)
+	subnetException["cloudfront.net"] = true
+	subnetException["recaptcha.net"] = true
+	subnetException["gstatic.com"] = true
+	subnetException["google-analytics.com"] = true
+	subnetException["googlesyndication.com"] = true
+	subnetException["googletagmanager.com"] = true
+	subnetException["doubleclick.net"] = true
+	subnetException["google.com"] = true
+	subnetException["googletagservices.com"] = true
+	subnetException["googleapis.com"] = true
+	subnetException["googleusercontent.com"] = true
+	subnetException["ggpht.com"] = true
+	subnetException["ytimg.com"] = true
+	subnetException["youtube-nocookie.com"] = true
+	subnetException["youtube.com"] = true
+	subnetException["googlevideo.com"] = true
+}
+
+func (stub Stub) ifUseSubnet(qName string) bool {
+	name := strings.TrimRight(qName, ".")
+	if name == ""{
+		return true
+	}
+	_, ok := subnetException[name]
+	if ok {
+		return false
+	}
+	idxFirstDot := strings.Index(name, ".")
+	tname := strings.TrimLeft(name[idxFirstDot:], ".")
+	_, ok = subnetException[tname]
+	if ok {
+		return false
+	}
+	return true
+}
 
 func (stub Stub) ensureConn() (*dns.Conn, error) {
 	if client == nil {
@@ -50,7 +89,7 @@ func turnAddrRoundRobin() (*dns.Conn, error) {
 	}
 
 	nextConnAddr := connsAddrs[nextConnIdx]
-	var nextConn  *dns.Conn
+	var nextConn *dns.Conn
 	if len(conns) >= nextConnIdx+1 {
 		if conns[nextConnIdx] != nil {
 			nextConn = conns[nextConnIdx]
@@ -62,7 +101,7 @@ func turnAddrRoundRobin() (*dns.Conn, error) {
 				nextConn = nextConn_
 			}
 		}
-	}else{
+	} else {
 		nextConn_, err := client.Dial(nextConnAddr)
 		if err != nil {
 			return nil, err
@@ -215,8 +254,8 @@ func (stub Stub) generateMsgFromReq(r *http.Request) (*dns.Msg, error) {
 	if ip == nil {
 		ip = net.ParseIP(qSubnet)
 	}
-	if err != nil || ip == nil {
-		Log.Debugf("question subnet invalid: %v", qSubnet)
+	if err != nil || ip == nil || !stub.ifUseSubnet(qName) {
+		Log.Debugf("question subnet skipped, name: %v, subnet: %v",qName, qSubnet)
 	} else {
 		subnet := new(dns.EDNS0_SUBNET)
 		subnet.Family = 0
@@ -252,6 +291,8 @@ func (stub Stub) Run() {
 	if stub.UseCache {
 		cache = NewCache()
 	}
+
+	stub.addSubnetException()
 
 	// get connection addresses.
 	addrs := strings.Split(stub.UpstreamAddr, ",")
@@ -289,3 +330,4 @@ func (stub Stub) Run() {
 	}
 	Log.Info("stopping stub server...")
 }
+
