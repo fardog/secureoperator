@@ -56,10 +56,12 @@ func (stub Stub) ifUseSubnet(qName string) bool {
 		return false
 	}
 	idxFirstDot := strings.Index(name, ".")
-	tname := strings.TrimLeft(name[idxFirstDot:], ".")
-	_, ok = subnetException[tname]
-	if ok {
-		return false
+	if idxFirstDot != -1 {
+		tname := strings.TrimLeft(name[idxFirstDot+1:], ".")
+		_, ok = subnetException[tname]
+		if ok {
+			return false
+		}
 	}
 	return true
 }
