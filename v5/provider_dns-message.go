@@ -113,8 +113,12 @@ func NewDMProvider(endpoint string, opts *DMProviderOptions) (*DMProvider, error
 
 func configHTTPClient(provider *DMProvider) error {
 	// Create TLS configuration with the certificate of the server
+	serverName, _, err := net.SplitHostPort(provider.url.Host)
+	if err != nil {
+		serverName = provider.url.Host
+	}
 	tlsConfig := &tls.Config{
-		ServerName: provider.url.Host,
+		ServerName: serverName,
 	}
 
 	// using custom CA certificate
