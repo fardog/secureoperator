@@ -16,3 +16,5 @@ require (
 )
 
 replace github.com/sirupsen/logrus v1.7.0 => github.com/tinkernels/logrus v1.7.1-0.20201103164625-e081dd4f4900
+
+replace github.com/zput/zxcTool v1.3.6 => github.com/tinkernels/zxcTool v1.3.7-0.20210207154812-aca5af524a3a

@@ -23,8 +23,9 @@ func NewLogger()*logrus.Logger{
 	log.SetReportCaller(true)
 
 	// use logrus default TextFormatter to get the IsColored() method.
-	defaultTextFormat := logrus.TextFormatter{}
-	_, _ = defaultTextFormat.Format(&logrus.Entry{Logger: log})
+	defaultTextFormatter := logrus.TextFormatter{}
+	_, _ = defaultTextFormatter.Format(&logrus.Entry{Logger: logrus.New()})
+	isColoredLog := defaultTextFormatter.IsColored()
 	log.SetFormatter(&zt_formatter.ZtFormatter{
 		CallerPrettyfier: func(f *runtime.Frame) (string, string) {
 			filename := path.Base(f.File)
@@ -32,8 +33,8 @@ func NewLogger()*logrus.Logger{
 		},
 		Formatter: nestedFormatter.Formatter{
 			FieldsOrder: []string{"component", "category"},
-			NoColors: !defaultTextFormat.IsColored(),
-			NoFieldsColors: !defaultTextFormat.IsColored(),
+			NoColors: !isColoredLog,
+			NoFieldsColors: !isColoredLog,
 		},
 	})
 	return log

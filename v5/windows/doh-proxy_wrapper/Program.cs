@@ -5,16 +5,33 @@ using System.Management.Automation;
 using System.Collections.ObjectModel;
 using System.Text;
 using System.Diagnostics;
+using System.Collections.Generic;
+using System.IO;
 
 namespace doh_proxy_wrapper
 {
     public class NetworkingExample
     {
+        static string executePath = "";
         public static void Main(string[] args)
         {
             var executeFile = System.Reflection.Assembly.GetEntryAssembly().Location;
 
-            var executePath = System.IO.Path.GetDirectoryName(executeFile);
+            executePath = System.IO.Path.GetDirectoryName(executeFile);
+            bool isSetup = false;
+            foreach( var arg in args)
+            {
+                if (arg == "setup")
+                {
+                    isSetup = true;
+                    break;
+                }
+            }
+            if (isSetup)
+            {
+                setUpConfig();
+                return;
+            }
             var argsStr = "";
             if (args != null && args.Length > 0)
             {
@@ -28,6 +45,57 @@ namespace doh_proxy_wrapper
             Console.WriteLine("Listening for address changes.");
 
             runCommand("doh-proxy.exe", executePath, argsStr);
+        }
+
+        static void setUpConfig()
+        {
+            NetworkInterface[] adapters = NetworkInterface.GetAllNetworkInterfaces();
+            Dictionary<int, int> indexMap = new Dictionary<int, int>();
+            int index = 1;
+            for (int i = 0; i < adapters.Length; i++)
+            {
+                // except type: Unknown Loopback
+                if (adapters[i].NetworkInterfaceType == NetworkInterfaceType.Loopback
+                    || adapters[i].NetworkInterfaceType == NetworkInterfaceType.Unknown
+                    || adapters[i].OperationalStatus != OperationalStatus.Up)
+                {
+                    continue;
+                }
+                Console.WriteLine($"{index++}: {adapters[i].Name}");
+                indexMap.Add(index - 1, i);
+            }
+
+            List<string> NICs = new List<string>();
+            while (true)
+            {
+                Console.WriteLine();
+                Console.Write($"Input Number of NIC (0 for exit input): ");
+                try
+                {
+                    var number = int.Parse(Console.ReadLine());
+                    if (number == 0)
+                    {
+                        break;
+                    }
+                    if (NICs.Contains(adapters[indexMap[number]].Name))
+                    {
+                        Console.WriteLine($"Selected NICs: {string.Join(", ", NICs)}");
+                        continue;
+                    }
+                    NICs.Add(adapters[indexMap[number]].Name);
+                    Console.WriteLine($"Selected NICs: {string.Join(", ", NICs)}");
+                }
+                catch{
+                    continue;
+                }
+            }
+            using (StreamWriter sw = new StreamWriter(Path.Combine(executePath, "NIC.txt"), false, Encoding.GetEncoding("UTF-8")))
+            {
+                foreach (string s in NICs)
+                {
+                    sw.WriteLine(s);
+                }
+            }
         }
 
         static void runCommand(string file, string wd="", string execParams ="")
@@ -64,12 +132,32 @@ namespace doh_proxy_wrapper
         static void ChangeDns()
         {
             NetworkInterface[] adapters = NetworkInterface.GetAllNetworkInterfaces();
+            List<string> NICs = new List<string>();
+            try
+            {
+                using (StreamReader sr = new StreamReader(Path.Combine(executePath, "NIC.txt"), Encoding.GetEncoding("UTF-8")))
+                {
+                    string line = "";
+                    while (!string.IsNullOrWhiteSpace((line = sr.ReadLine())))
+                    {
+                        NICs.Add(line);
+                    }
+                }
+            }
+            catch
+            {
+                Console.WriteLine($"NIC.txt file read error.");
+                return;
+            }
+            
             foreach (NetworkInterface n in adapters)
             {
+
                 // except type: Unknown Loopback
                 if (n.NetworkInterfaceType == NetworkInterfaceType.Loopback
                     || n.NetworkInterfaceType == NetworkInterfaceType.Unknown
-                    || n.OperationalStatus != OperationalStatus.Up)
+                    || n.OperationalStatus != OperationalStatus.Up
+                    || !NICs.Contains(n.Name))
                 {
                     continue;
                 }
