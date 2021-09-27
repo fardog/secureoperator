@@ -1,7 +1,7 @@
-# secureoperator
+# doh-proxy
 
-[![Build Status](https://travis-ci.org/fardog/secureoperator.svg?branch=master)](https://travis-ci.org/fardog/secureoperator)
-[![](https://godoc.org/github.com/fardog/secureoperator?status.svg)](https://godoc.org/github.com/fardog/secureoperator)
+[![Build Status](https://travis-ci.com/tinkernels/doh-proxy.svg?branch=master)](https://travis-ci.com/tinkernels/doh-proxy)
+[![Go Doc](https://godoc.org/github.com/fardog/secureoperator?status.svg)](https://godoc.org/github.com/fardog/secureoperator)
 
 A DNS-protocol proxy for [DNS-over-HTTPS][dnsoverhttps]: allows you to run a
 server on your local network which responds to DNS queries, but requests records
@@ -9,9 +9,9 @@ across the internet using HTTPS.
 
 It's known to work with the following providers:
 
-* [Google][dnsoverhttps] - Well tested and configured by default
-* [Cloudflare][] _(Beta)_ - May be used by passing the `--cloudflare` flag
-* [Quad9][] _(Beta)_ - May be used by passing the `--quad9' flag
+* [Google][google doh] - Well tested with `-google` option and endpoint `https://dns.google/resolve`
+* [Cloudflare][cloudflare doh]  - Tested without `-google` option
+* [Quad9][quad9 doh]  - Test Wanted.
 
 If you're interested in a more roll-your-own-DNS system, you might look at
 [dnoxy][], a sibling project to secureoperator which allows running your own
@@ -19,62 +19,141 @@ DNS-over-HTTPS servers.
 
 ## Installation
 
+**docker**
+```shell
+docker run -d -p 53:53 -p 53:53/udp --name doh-proxy  tinkernels/doh-proxy doh-proxy -google -http2 -endpoint "https://dns.google/resolve"  -endpoint-ips "8.8.8.8,8.8.4.4" -edns-subnet auto -listen 127.0.0.1:53 -no-ipv6 -cache=true -loglevel info
+```
+Notes:
+- The default parameters are the ones below.
+- A more advanced run example, with eventual different params or additional capabilities:      
+```shell
+docker run -d -p 53:53 -p 53:53/udp --name doh-proxy --cap-add=NET_ADMIN --cap-add=CAP_NET_BIND_SERVICE --cap-add=NET_RAW tinkernels/doh-proxy doh-proxy -google -http2 -endpoint "https://dns.google/resolve"  -endpoint-ips "8.8.8.8,8.8.4.4" -edns-subnet auto -listen 127.0.0.1:53 -no-ipv6 -cache=true -loglevel info
+```      
+Should there be perms issues, see: https://github.com/pi-hole/docker-pi-hole#note-on-capabilities for eventual more cappabilities, like:
+`--cap-add=NET_ADMIN --cap-add=CAP_NET_BIND_SERVICE --cap-add=NET_RAW`
+    
+**manually**     
 You may retrieve binaries from [the releases page][releases], or install using
 `go get`:
 
 ```
-go get -u github.com/fardog/secureoperator/cmd/secure-operator
+go get -u github.com/tinkernels/doh-proxy/v5
 ```
 
-Then either run the binary you downloaded, or the built package:
+**systemd unit file sample**
 
-```
-secure-operator
+```ini
+[Unit]
+Description=proxy for dns over https
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/doh-proxy -google -http2 -endpoint "https://dns.google/resolve"  -endpoint-ips "8.8.8.8,8.8.4.4" -edns-subnet auto -listen 127.0.0.1:53 -no-ipv6 -cache=true -loglevel info
+
+[Install]
+WantedBy=multi-user.target
 ```
 
-This will start a DNS server listening on TCP and UDP at `:53`. For usage
-information, run `secure-operator --help`.
+## Usage
+
+Then either run the binary you downloaded, or the built package with:
+```
+make release
+```
+Information on the usage of program options is available with
+```shell
+__DOH_PROXY_PROGRAM_PATH__ --help
+
+A DNS-protocol proxy for DNS-over-HTTPS service.
+
+Usage:
+
+  doh-proxy_macos-amd64 [options]
+
+Options:
+
+  -cacert string
+        CA certificate for TLS establishment
+  -cache
+        Cache the dns answers (default true)
+  -dns-resolver string
+        DNS resolver for retrieve ip of DoH enpoint host, e.g. "8.8.8.8:53";
+  -edns-subnet string
+        Specify a subnet to be sent in the edns0-client-subnet option;
+        take your own risk of privacy to use this option;
+        no: will not use edns_subnet;
+        auto: will use your current external IP address;
+        net/mask: will use specified subnet, e.g. 66.66.66.66/24.
+                (default "auto")
+  -endpoint string
+        DNS-over-HTTPS endpoint url (default "https://dns.google/dns-query")
+  -endpoint-ips string
+        IPs of the DNS-over-HTTPS endpoint; if provided, endpoint lookup is
+        skipped, the TLS establishment will direct hit the "endpoint-ips". Comma
+        separated with no spaces; e.g. "74.125.28.139,74.125.28.102". One server is
+        randomly chosen for each request, failed requests are not retried.
+  -google
+        Alternative google url scheme like dns.google/resolve.
+  -headers value
+        Additional headers to be sent with http requests, as Key=Value; specify
+        multiple as:
+            -header Key-1=Value-1-1 -header Key-1=Value1-2 -header Key-2=Value-2
+  -http2
+        Using http2 for query connection
+  -json
+        JSON API for DoH like dns.google/resolve.
+  -listen [host]:port
+        listen address, as [host]:port (default ":53")
+  -loglevel string
+        Log level, one of: debug, info, warn, error, fatal, panic (default "info")
+  -no-ipv6
+        Reply all AAAA questions with a fake answer
+  -param value
+        Additional query parameters to be sent with http requests, as key=value;
+        specify multiple as:
+            -param key1=value1-1 -param key1=value1-2 -param key2=value2
+  -tcp
+        Listen on TCP (default true)
+  -udp
+        Listen on UDP (default true)
+  -version
+        Print version info
+```
+and
+```shell
+__DOH_STUB_PROGRAM_PATH__ --help
+
+A DoH stub server.
+
+Usage:
+
+  doh-stub_macos-amd64 [options]
+
+Options:
+
+  -cache
+        Cache the dns answers (default true)
+  -listen [host]:port
+        Listen address, as [host]:port (default ":53")
+  -loglevel string
+        Log level, one of: debug, info, warn, error, fatal, panic (default "info")
+  -upstream-addr string
+        Upstream dns server (default "https://dns.google/dns-query")
+  -upstream-protocol string
+        Upstream dns server protocol, tcp or udp (default "tcp")
+  -version
+        Print version info
+```
 
 **Note:** Running a service on port `53` requires administrative privileges on
 most systems.
-
-### Docker
-
-There is a [Docker][docker] image available for secureoperator:
-
-```
-docker pull fardog/secureoperator
-```
-
-The `latest` tag will always be the build from the `master` branch. If you wish
-to use one of the stable releases, use its version tag when pulling, e.g.:
-
-```
-docker pull fardog/secureoperator:4  # latest of major version
-docker pull fardog/secureoperator:4.0  # latest of minor version
-docker pull fardog/secureoperator:4.0.1  # exact version
-```
 
 ## Version Compatibility
 
 This package follows [semver][] for its tagged releases. The `master` branch is
 always considered stable, but may break API compatibility. If you require API
 stability, either use the tagged releases or mirror on gopkg.in:
-
-```
-go get -u gopkg.in/fardog/secureoperator.v4
-```
-
-## Caching
-
-secureoperator _does not perform any caching_; each request to it causes a
-matching request to the upstream DNS-over-HTTPS server to be made. It's
-recommended that you place secureoperator behind a caching DNS server such as
-[dnsmasq][] on your local network.
-
-An simple example setup is [described on the wiki][wiki-setup]. Please feel free
-to contribute additional setups if you are running secureoperator in your
-environment.
 
 ## Security
 
@@ -93,29 +172,26 @@ consider the following:
       lookup will be performed. However if the addresses change while the
       service is running, you will need to restart the service to provide new
       addresses.
-      
-Information on the usage of these options is available with
-`secure-operator --help`. 
-  
+
 ## Help Wanted
 
-secureoperator could be greatly enhanced by community contributions! The
+doh-proxy could be greatly enhanced by community contributions! The
 following areas could use work:
 
 * More thorough unit tests
 * Installable packages for your favorite Linux distributions
-* Documentation on deploying secureoperator to a local network
+* Documentation on deploying doh-proxy to a local network
 
 ### Known Issues
 
-Cloudflare is not fully tested yet; it should work for common cases, however: 
+* **Only HTTP GET Request implemented**
 
-* EDNS is not supported; this is an intentional choice by Cloudflare, which
+* EDNS is not supported except google; this is an intentional choice by Cloudflare, which
   means any EDNS setting you provide when using Cloudflare as a provider will
   be silently ignored.
 
 For a production environment, the Google provider (default) is your best option
-today. If you're brave, please test Cloudflare and [report any issues][issues]!
+today. Welcome [report any issues][issues] if you run to a panic!
 
 ## Acknowledgments
 
@@ -125,27 +201,23 @@ This owes heavily to the following work:
 * https://github.com/wrouesnel/dns-over-https-proxy
 * https://github.com/StalkR/dns-reverse-proxy
 
+## Similar projects:
+* https://dnscrypt.info/implementations
+
 ## License
 
-```
-   Copyright 2018 Nathan Wittstock
+[Apache License 2.0][license]
 
-   Licensed under the Apache License, Version 2.0 (the "License");
-   you may not use this file except in compliance with the License.
-   You may obtain a copy of the License at
 
-       http://www.apache.org/licenses/LICENSE-2.0
-```
-
-[dnsoverhttps]: https://developers.google.com/speed/public-dns/docs/dns-over-https
 [googlednspriv]: https://developers.google.com/speed/public-dns/privacy
-[cloudflarednspriv]: https://developers.cloudflare.com/1.1.1.1/commitment-to-privacy/
-[releases]: https://github.com/fardog/secureoperator/releases
+[cloudflarednspriv]: https://developers.cloudflare.com/1.1.1.1/privacy/
+[releases]: https://github.com/tinkernels/doh-proxy/releases
 [docker]: https://www.docker.com/
-[issues]: https://github.com/fardog/secureoperator/issues
+[issues]: https://github.com/tinkernels/doh-proxy/issues
 [semver]: http://semver.org/
-[wiki-setup]: https://github.com/fardog/secureoperator/wiki/Setting-up-dnsmasq-with-secureoperator
-[dnsmasq]: http://www.thekelleys.org.uk/dnsmasq/doc.html
-[cloudflare]: https://1.1.1.1/
-[quad9]: https://www.quad9.net/
+[google doh]: https://developers.google.com/speed/public-dns/docs/dns-over-https
+[cloudflare doh]: https://developers.cloudflare.com/1.1.1.1/dns-over-https/
+[quad9 doh]: https://www.quad9.net/
 [dnoxy]: https://github.com/fardog/dnoxy
+[license]: https://github.com/fardog/secureoperator/blob/master/LICENSE
+[dnsoverhttps]: https://tools.ietf.org/html/rfc8484

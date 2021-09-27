@@ -1,27 +1,10 @@
 language: go
 go:
-- "1.9"
-- "1.10"
+- '1.13'
+- '1.14'
+- '1.14.2'
 - tip
+before_install: cd v5
 install:
-- go get -u -v github.com/fardog/secureoperator
-- go get -u -v github.com/fardog/secureoperator/cmd
-- go get -u -v github.com/fardog/secureoperator/cmd/secure-operator
-before_deploy: "make release"
-deploy:
-  provider: releases
-  api_key:
-    secure: vFsdmPnhrs2vRmw83aeMOk7UFHHBtnTjY9WmY96Onannur4d7Rwg58Lmz7gwsx2z/6pD9Ghbd9/eloqUrCIubPzJVvhCU+DJ+n4GnxR9bLvAS6ekY5UedaBAEdVdpcr5bS84xIdYWBD6PgaJs6/sZazgEShDKzpcL9wpv5pOZNfSLtmYYkKlzsPScUehGLhVwBstKD1sxDBxjV9nYDgX3zwZKPWz8zqPxyzUq4evPxDYuh9aUILqObwSfZy4AEuBRFnpXLNdZtpCPK3VAT3PC9XYbBqauQAOs3V08V61LsFBQ2Pvvt2YnXqAkeQQ5PzgX0e8hOQQmH73X/f2fKERbXM8jotlfMLz17Vq8GMISXzdyshWmv+ovXwTATrQFjB6s8xq2Xwyni1fbg81+StPY5aw7n45DgQFhDx7ar6g3YuAWD4bv8+xDawma+fZ+lfTIqKTryb7cCNPm6cGdW6a00JhZcO0BQ20kHHKruYKq6QZNqQkr8Q0XEVBGYZquqodC83k4abx/TONEgf+KHtYzDuoaYTn8QNeSnxED2LgMitR8vFZtYNr0bc6h+hBNQD+4/DJC+IQx9bW2Cja5E3UmRaJT0M+oBSf2WZmywZHTl54FarvMvqkSklbD+NKZxbL821ReoJZnYlTjDxhF8aBP8dvBcPNS9OJwhSFrlL34iA=
-  file:
-  - release/secure-operator_linux-amd64
-  - release/secure-operator_linux-386
-  - release/secure-operator_linux-arm
-  - release/secure-operator_macos-amd64
-  - release/secure-operator_macos-386
-  - release/secure-operator_windows-amd64.exe
-  - release/secure-operator_windows-386.exe
-  skip_cleanup: true
-  on:
-    repo: fardog/secureoperator
-    tags: true
-    go: "1.10"
+- make release
+
